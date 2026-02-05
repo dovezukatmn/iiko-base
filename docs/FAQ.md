@@ -182,26 +182,54 @@ systemctl restart iiko-backend
 
 ### Не могу подключиться к PostgreSQL
 
+> **📚 Полное руководство:** См. [DATABASE_ERRORS.md](DATABASE_ERRORS.md) для подробной диагностики и решения всех проблем с PostgreSQL
+
+**Ошибка:** `[ERROR] Не удалось подключиться к PostgreSQL` при запуске setup.sh
+
+**Быстрое решение:**
+
+1. Проверьте, запущен ли PostgreSQL:
+   ```bash
+   sudo systemctl status postgresql
+   sudo systemctl start postgresql  # если не запущен
+   ```
+
+2. Убедитесь, что пользователь существует:
+   ```bash
+   sudo -u postgres psql
+   CREATE USER iiko_user WITH PASSWORD 'ваш_пароль';
+   ALTER USER iiko_user CREATEDB;
+   \q
+   ```
+
+3. Настройте pg_hba.conf для парольной аутентификации:
+   ```bash
+   sudo nano /etc/postgresql/14/main/pg_hba.conf
+   ```
+   Добавьте перед строкой "local all all peer":
+   ```
+   host    all             all             127.0.0.1/32            md5
+   ```
+   
+4. Перезапустите PostgreSQL:
+   ```bash
+   sudo systemctl restart postgresql
+   ```
+
+5. Проверьте подключение (обязательно с `-h localhost`):
+   ```bash
+   psql -h localhost -U iiko_user -d postgres
+   ```
+
 **Ошибка:** `FATAL: Peer authentication failed for user "iiko_user"`
 
 **Решение:**
 Эта ошибка возникает, когда PostgreSQL пытается использовать peer-аутентификацию вместо парольной. 
 
-1. Всегда используйте `-h localhost` при подключении:
-   ```bash
-   psql -h localhost -U iiko_user -d iiko_db
-   ```
-
-2. Или настройте pg_hba.conf для использования md5/scram-sha-256:
-   ```bash
-   sudo nano /etc/postgresql/14/main/pg_hba.conf
-   ```
-   Измените строку `local all all peer` на `local all all md5`
-   
-3. Перезапустите PostgreSQL:
-   ```bash
-   sudo systemctl restart postgresql
-   ```
+Всегда используйте `-h localhost` при подключении:
+```bash
+psql -h localhost -U iiko_user -d iiko_db
+```
 
 **Ошибка:** `FATAL: password authentication failed`
 
@@ -214,6 +242,8 @@ systemctl restart iiko-backend
    \q
    ```
 3. Обновите пароль в backend/.env и frontend/.env
+
+> 💡 **Совет:** Обновленный скрипт setup.sh теперь автоматически проверяет статус PostgreSQL и выводит подробную диагностику при ошибках подключения.
 
 ### Ошибка "Permission denied"
 
