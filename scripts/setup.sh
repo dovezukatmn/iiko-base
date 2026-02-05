@@ -160,9 +160,13 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
             DB_PORT=${DB_PORT:-5432}
             
             print_info "Проверка подключения к базе данных..."
-            
+
             # Проверяем подключение к PostgreSQL (ОБЯЗАТЕЛЬНО с флагом -h для password auth)
-            if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -c '\q' 2>/dev/null; then
+            # Сохраняем вывод ошибок для диагностики
+            CONNECTION_ERROR=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -c '\q' 2>&1)
+            CONNECTION_STATUS=$?
+
+            if [ $CONNECTION_STATUS -eq 0 ]; then
                 print_info "✓ Подключение к PostgreSQL успешно"
                 
                 # Проверяем существование базы данных (используем безопасное сравнение)
@@ -202,7 +206,14 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
                 print_info "═══════════════════════════════════════════════════════════"
                 print_info "ДИАГНОСТИКА ПРОБЛЕМЫ:"
                 print_info "═══════════════════════════════════════════════════════════"
-                
+
+                # Показываем фактическую ошибку PostgreSQL
+                if [ -n "$CONNECTION_ERROR" ]; then
+                    print_error "Ошибка подключения:"
+                    echo "$CONNECTION_ERROR" | head -n 5
+                    print_info ""
+                fi
+
                 # Проверка 1: PostgreSQL запущен?
                 if systemctl is-active --quiet postgresql 2>/dev/null; then
                     print_info "✓ PostgreSQL запущен"
@@ -210,7 +221,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
                     print_error "✗ PostgreSQL не запущен"
                     print_info "  Решение: sudo systemctl start postgresql"
                 fi
-                
+
                 # Проверка 2: Пользователь существует?
                 print_info ""
                 print_info "Проверьте, существует ли пользователь $DB_USER:"
@@ -219,7 +230,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
                 print_info "Если пользователь не существует, создайте его:"
                 print_info "  sudo -u postgres psql -c \"CREATE USER $DB_USER WITH PASSWORD 'ваш_пароль';\""
                 print_info "  sudo -u postgres psql -c \"ALTER USER $DB_USER CREATEDB;\""
-                
+
                 # Проверка 3: Аутентификация
                 print_info ""
                 print_info "Проверьте настройки аутентификации в pg_hba.conf:"
@@ -231,13 +242,13 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
                 print_info ""
                 print_info "После изменений перезапустите PostgreSQL:"
                 print_info "  sudo systemctl restart postgresql"
-                
+
                 # Проверка 4: Тест подключения
                 print_info ""
                 print_info "Проверьте подключение вручную:"
                 print_info "  psql -h localhost -U $DB_USER -d postgres"
                 print_info "  (введите пароль при запросе)"
-                
+
                 print_info "═══════════════════════════════════════════════════════════"
                 print_info ""
                 print_info "Подробную информацию смотрите в docs/DATABASE_ERRORS.md"
