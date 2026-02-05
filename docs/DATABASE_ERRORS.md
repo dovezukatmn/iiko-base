@@ -22,18 +22,63 @@
 ```
 [INFO] Инициализация базы данных...
 Хотите инициализировать базу данных? (y/n) y
-Введите имя пользователя PostgreSQL [iiko_user]: 
-Введите пароль PostgreSQL: 
-Введите имя базы данных [iiko_db]: 
-Введите хост PostgreSQL [localhost]: 
-Введите порт PostgreSQL [5432]: 
+Введите имя пользователя PostgreSQL [iiko_user]:
+Введите пароль PostgreSQL:
+Введите имя базы данных [iiko_db]:
+Введите хост PostgreSQL [localhost]:
+Введите порт PostgreSQL [5432]:
 [INFO] Проверка подключения к базе данных...
 [ERROR] Не удалось подключиться к PostgreSQL
+[ERROR] Ошибка подключения:
+psql: error: connection to server at "localhost" (127.0.0.1), port 5432 failed: FATAL:  password authentication failed for user "iiko_user"
 ```
+
+**Обратите внимание**: Скрипт теперь показывает фактическую ошибку PostgreSQL, что помогает точно определить причину проблемы.
 
 ---
 
 ## Причины возникновения ошибок
+
+### Расшифровка типичных ошибок PostgreSQL
+
+Скрипт `setup.sh` теперь показывает фактическую ошибку от PostgreSQL. Вот наиболее распространенные ошибки и их решения:
+
+#### **"password authentication failed for user"**
+```
+FATAL: password authentication failed for user "iiko_user"
+```
+**Причина**: Неправильный пароль или пользователь не существует.
+
+**Решение**:
+1. Проверьте, что пользователь существует: `sudo -u postgres psql -c "\du iiko_user"`
+2. Если не существует, создайте: см. раздел "Создание пользователя"
+3. Если существует, сбросьте пароль: см. раздел "Неправильный пароль"
+
+#### **"role does not exist"**
+```
+FATAL: role "iiko_user" does not exist
+```
+**Причина**: Пользователь PostgreSQL не создан.
+
+**Решение**: Создайте пользователя (см. раздел 2 ниже)
+
+#### **"connection refused"**
+```
+could not connect to server: Connection refused
+```
+**Причина**: PostgreSQL не запущен или не слушает на указанном порту.
+
+**Решение**: Запустите PostgreSQL: `sudo systemctl start postgresql`
+
+#### **"no pg_hba.conf entry"**
+```
+FATAL: no pg_hba.conf entry for host "127.0.0.1", user "iiko_user", database "postgres"
+```
+**Причина**: Настройки аутентификации не разрешают подключение.
+
+**Решение**: Настройте pg_hba.conf (см. раздел 3 ниже)
+
+---
 
 ### 1. **PostgreSQL не запущен**
 
