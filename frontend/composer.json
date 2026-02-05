@@ -35,16 +35,16 @@
     "scripts": {
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
-            "@php artisan package:discover --ansi"
+            "@php -r \"file_exists('artisan') && system('php artisan package:discover --ansi') || exit(0);\""
         ],
         "post-update-cmd": [
-            "@php artisan vendor:publish --tag=laravel-assets --ansi --force"
+            "@php -r \"file_exists('artisan') && system('php artisan vendor:publish --tag=laravel-assets --ansi --force') || exit(0);\""
         ],
         "post-root-package-install": [
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
         ],
         "post-create-project-cmd": [
-            "@php artisan key:generate --ansi"
+            "@php -r \"file_exists('artisan') && system('php artisan key:generate --ansi') || exit(0);\""
         ]
     },
     "extra": {

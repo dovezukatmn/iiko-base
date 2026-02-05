@@ -32,6 +32,10 @@ cd "$PROJECT_DIR"
 
 print_info "Настройка окружения в директории: $PROJECT_DIR"
 
+# Настройка git safe.directory для избежания ошибки dubious ownership
+print_info "Настройка git safe.directory..."
+git config --global --add safe.directory "$PROJECT_DIR" 2>/dev/null || true
+
 # Настройка Python backend
 print_info "Настройка Python backend..."
 cd backend
@@ -63,16 +67,24 @@ cd frontend
 # Установка зависимостей Laravel
 if [ -f "composer.json" ]; then
     print_info "Установка зависимостей Composer..."
-    composer install --no-dev --optimize-autoloader
+    # Разрешаем запуск composer от root и игнорируем ошибки post-install скриптов
+    COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader --no-scripts || print_warning "Composer install завершился с предупреждениями"
+
+    # Запускаем autoload-dump отдельно
+    COMPOSER_ALLOW_SUPERUSER=1 composer dump-autoload --optimize --no-scripts
 fi
 
 # Создание .env файла для frontend
 if [ ! -f ".env" ]; then
     print_info "Создание .env файла для frontend..."
     cp .env.example .env
-    
-    # Генерация ключа приложения
-    php artisan key:generate || print_warning "Не удалось сгенерировать ключ приложения"
+
+    # Генерация ключа приложения (только если artisan существует)
+    if [ -f "artisan" ]; then
+        php artisan key:generate || print_warning "Не удалось сгенерировать ключ приложения"
+    else
+        print_warning "Файл artisan не найден, пропуск генерации ключа"
+    fi
 fi
 
 cd ..
