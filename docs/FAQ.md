@@ -182,6 +182,27 @@ systemctl restart iiko-backend
 
 ### Не могу подключиться к PostgreSQL
 
+**Ошибка:** `FATAL: Peer authentication failed for user "iiko_user"`
+
+**Решение:**
+Эта ошибка возникает, когда PostgreSQL пытается использовать peer-аутентификацию вместо парольной. 
+
+1. Всегда используйте `-h localhost` при подключении:
+   ```bash
+   psql -h localhost -U iiko_user -d iiko_db
+   ```
+
+2. Или настройте pg_hba.conf для использования md5/scram-sha-256:
+   ```bash
+   sudo nano /etc/postgresql/14/main/pg_hba.conf
+   ```
+   Измените строку `local all all peer` на `local all all md5`
+   
+3. Перезапустите PostgreSQL:
+   ```bash
+   sudo systemctl restart postgresql
+   ```
+
 **Ошибка:** `FATAL: password authentication failed`
 
 **Решения:**
@@ -211,6 +232,31 @@ systemctl restart iiko-backend
 3. Для storage Laravel:
    ```bash
    sudo chmod -R 775 /var/www/iiko-base/frontend/storage
+   ```
+
+### Laravel ошибка "directory must be present and writable"
+
+**Ошибка:** `The /var/www/iiko-base/frontend/bootstrap/cache directory must be present and writable`
+
+**Решение:**
+Эта ошибка возникает, когда отсутствуют необходимые директории Laravel.
+
+1. Запустите скрипт setup.sh, который создаст все необходимые директории:
+   ```bash
+   ./scripts/setup.sh
+   ```
+
+2. Или создайте директории вручную:
+   ```bash
+   mkdir -p frontend/bootstrap/cache
+   mkdir -p frontend/storage/{app,framework,logs}
+   mkdir -p frontend/storage/framework/{sessions,views,cache}
+   ```
+
+3. Установите правильные права:
+   ```bash
+   chmod -R 775 frontend/storage
+   chmod -R 775 frontend/bootstrap/cache
    ```
 
 ### SSL сертификат не работает

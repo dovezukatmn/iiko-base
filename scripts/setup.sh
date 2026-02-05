@@ -64,6 +64,16 @@ cd ..
 print_info "Настройка Laravel frontend..."
 cd frontend
 
+# Создание необходимых директорий Laravel
+print_info "Создание необходимых директорий..."
+mkdir -p bootstrap/cache
+mkdir -p storage/app/public
+mkdir -p storage/framework/cache/data
+mkdir -p storage/framework/sessions
+mkdir -p storage/framework/testing
+mkdir -p storage/framework/views
+mkdir -p storage/logs
+
 # Установка зависимостей Laravel
 if [ -f "composer.json" ]; then
     print_info "Установка зависимостей Composer..."
@@ -113,8 +123,41 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     read -p "Введите имя базы данных [iiko_db]: " DB_NAME
     DB_NAME=${DB_NAME:-iiko_db}
     
-    print_info "Инициализация таблиц..."
-    PGPASSWORD=$DB_PASSWORD psql -U $DB_USER -d $DB_NAME -f database/schema.sql || print_warning "Не удалось выполнить инициализацию БД"
+    read -p "Введите хост PostgreSQL [localhost]: " DB_HOST
+    DB_HOST=${DB_HOST:-localhost}
+    
+    read -p "Введите порт PostgreSQL [5432]: " DB_PORT
+    DB_PORT=${DB_PORT:-5432}
+    
+    print_info "Проверка подключения к базе данных..."
+    # Проверяем подключение
+    if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -c '\q' 2>/dev/null; then
+        print_info "Подключение к PostgreSQL успешно"
+        
+        # Проверяем существование базы данных (используем безопасное сравнение)
+        DB_EXISTS=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname=\$\$${DB_NAME}\$\$" 2>/dev/null)
+        
+        if [ "$DB_EXISTS" != "1" ]; then
+            print_info "База данных $DB_NAME не существует, создание..."
+            # Используем идентификаторы вместо прямой интерполяции для безопасности
+            PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -c "CREATE DATABASE \"${DB_NAME}\";" || print_warning "Не удалось создать базу данных"
+        fi
+        
+        print_info "Инициализация таблиц..."
+        if [ -f "database/schema.sql" ]; then
+            PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f database/schema.sql || print_warning "Не удалось выполнить инициализацию БД"
+        else
+            print_warning "Файл database/schema.sql не найден"
+        fi
+    else
+        print_error "Не удалось подключиться к PostgreSQL"
+        print_info "Убедитесь, что:"
+        print_info "  1. PostgreSQL запущен"
+        print_info "  2. Пользователь $DB_USER существует и имеет права"
+        print_info "  3. PostgreSQL настроен на прием подключений на $DB_HOST:$DB_PORT"
+        print_info "  4. В pg_hba.conf разрешена аутентификация по паролю (md5 или scram-sha-256)"
+        print_warning "Пропуск инициализации БД"
+    fi
 fi
 
 print_info "Настройка окружения завершена!"

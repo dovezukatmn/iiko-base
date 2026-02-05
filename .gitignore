@@ -53,10 +53,9 @@ Thumbs.db
 frontend/vendor/
 frontend/node_modules/
 frontend/.env
-frontend/storage/
-frontend/bootstrap/cache/
+
 
 # Backups
-*.sql
-*.sql.gz
 backups/
+*.sql.gz
+
