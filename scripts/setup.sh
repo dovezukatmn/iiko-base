@@ -131,20 +131,21 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     
     print_info "Проверка подключения к базе данных..."
     # Проверяем подключение
-    if PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d postgres -c '\q' 2>/dev/null; then
+    if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -c '\q' 2>/dev/null; then
         print_info "Подключение к PostgreSQL успешно"
         
-        # Проверяем существование базы данных
-        DB_EXISTS=$(PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" 2>/dev/null)
+        # Проверяем существование базы данных (используем безопасное сравнение)
+        DB_EXISTS=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname=\$\$${DB_NAME}\$\$" 2>/dev/null)
         
         if [ "$DB_EXISTS" != "1" ]; then
             print_info "База данных $DB_NAME не существует, создание..."
-            PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d postgres -c "CREATE DATABASE $DB_NAME;" || print_warning "Не удалось создать базу данных"
+            # Используем идентификаторы вместо прямой интерполяции для безопасности
+            PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -c "CREATE DATABASE \"${DB_NAME}\";" || print_warning "Не удалось создать базу данных"
         fi
         
         print_info "Инициализация таблиц..."
         if [ -f "database/schema.sql" ]; then
-            PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -f database/schema.sql || print_warning "Не удалось выполнить инициализацию БД"
+            PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f database/schema.sql || print_warning "Не удалось выполнить инициализацию БД"
         else
             print_warning "Файл database/schema.sql не найден"
         fi

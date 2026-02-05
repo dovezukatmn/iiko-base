@@ -67,9 +67,7 @@ for dir in "${laravel_dirs[@]}"; do
     if [ -d "$dir" ]; then
         print_success "$dir существует"
         # Проверка прав доступа
-        if [ -w "$dir" ]; then
-            : # директория доступна для записи
-        else
+        if [ ! -w "$dir" ]; then
             print_warning "$dir не доступна для записи"
             ((warnings++))
         fi

@@ -27,7 +27,7 @@ CREATE TABLE menu_items (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     description TEXT,
-    price INTEGER,  -- Цена в копейках
+    price INTEGER CHECK (price >= 0),  -- Цена в копейках (1/100 рубля)
     category VARCHAR(100),
     is_available BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
