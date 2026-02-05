@@ -56,10 +56,7 @@ print_info "Обновление зависимостей Laravel..."
 cd frontend
 
 # Убедимся, что необходимые директории Laravel существуют
-mkdir -p resources/views
-mkdir -p storage/framework/{sessions,views,cache}
-mkdir -p storage/logs
-mkdir -p bootstrap/cache
+mkdir -p resources/views storage/framework/{sessions,views,cache} storage/logs bootstrap/cache
 
 # Создание .env файла, если он не существует
 if [ ! -f .env ]; then
@@ -71,9 +68,9 @@ fi
 composer install --no-dev --optimize-autoloader
 
 # Генерация ключа приложения, если он не задан
-if ! grep -q "APP_KEY=base64:" .env; then
+if ! grep -qE "^APP_KEY=.+" .env || grep -qE "^APP_KEY=$" .env; then
     print_info "Генерация ключа приложения..."
-    php artisan key:generate
+    php artisan key:generate --force
 fi
 
 php artisan config:cache
