@@ -236,7 +236,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
                 print_info ""
                 print_info "Проверьте подключение вручную:"
                 print_info "  psql -h localhost -U $DB_USER -d postgres"
-                print_info "  (введите пароль: $DB_PASSWORD)"
+                print_info "  (введите пароль при запросе)"
                 
                 print_info "═══════════════════════════════════════════════════════════"
                 print_info ""
