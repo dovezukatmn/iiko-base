@@ -301,7 +301,7 @@ psql -h localhost -U iiko_user -d iiko_db
 
 2. Получите сертификат заново:
    ```bash
-   certbot --nginx -d yourdomain.com
+   certbot --nginx -d vezuroll.ru
    ```
 
 3. Проверьте конфигурацию:
@@ -312,7 +312,7 @@ psql -h localhost -U iiko_user -d iiko_db
 
 4. Проверьте, что DNS записи настроены правильно:
    ```bash
-   dig yourdomain.com
+   dig vezuroll.ru
    ```
 
 ## Docker
