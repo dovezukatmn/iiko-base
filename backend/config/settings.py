@@ -7,7 +7,7 @@ from typing import List
 
 class Settings(BaseSettings):
     # Database
-    DATABASE_URL: str = "postgresql://iiko_user:password@localhost:5432/iiko_db"
+    DATABASE_URL: str = "postgresql://iiko_user:12101991Qq!@localhost:5432/iiko_db"
     
     # Application
     APP_NAME: str = "iiko-base"
@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     
     # API
     API_V1_PREFIX: str = "/api/v1"
-    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000"]
+    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000", "https://vezuroll.ru", "https://b1d8d8270d0f.vps.myjino.ru", "http://vezuroll.ru", "http://b1d8d8270d0f.vps.myjino.ru"]
     
     # Server
     HOST: str = "0.0.0.0"

@@ -128,8 +128,8 @@ frontend/
 
 **Конфигурация:**
 ```
-Запросы к yourdomain.com → Laravel (PHP-FPM)
-Запросы к api.yourdomain.com → Python Backend (port 8000)
+Запросы к vezuroll.ru или b1d8d8270d0f.vps.myjino.ru → Laravel (PHP-FPM)
+Запросы к api.vezuroll.ru или api.b1d8d8270d0f.vps.myjino.ru → Python Backend (port 8000)
 ```
 
 ## Поток данных

@@ -207,7 +207,7 @@ nano backend/.env
 DATABASE_URL=postgresql://iiko_user:your_password@localhost:5432/iiko_db
 ```
 
-Измените `your_password` на пароль, который вы вводили выше.
+Измените `your_password` на пароль 12101991Qq!
 
 Также измените:
 ```
@@ -230,7 +230,7 @@ nano frontend/.env
 DB_PASSWORD=your_password
 ```
 
-Измените на тот же пароль.
+Измените на пароль 12101991Qq!
 
 Сохраните (Ctrl+O, Enter, Ctrl+X)
 
@@ -245,9 +245,7 @@ nano nginx/iiko-base.conf
 yourdomain.com
 ```
 
-Если у вас есть домен - замените на ваш домен (например, myrestaurant.ru)
-
-Если нет домена - замените на IP адрес вашего сервера
+Замените на ваш домен (vezuroll.ru или b1d8d8270d0f.vps.myjino.ru)
 
 Сохраните файл.
 
@@ -266,13 +264,14 @@ yourdomain.com
 Откройте браузер и перейдите:
 
 **Если у вас домен:**
-- http://yourdomain.com
+- http://vezuroll.ru
+- http://b1d8d8270d0f.vps.myjino.ru
 
 **Если только IP:**
 - http://185.123.45.67 (ваш IP)
 
 **API Backend:**
-- http://yourdomain.com:8000/docs (или http://IP:8000/docs)
+- http://api.vezuroll.ru/docs (или http://IP:8000/docs)
 
 Вы должны увидеть документацию API!
 
@@ -310,7 +309,7 @@ apt-get install certbot python3-certbot-nginx -y
 
 Затем:
 ```bash
-certbot --nginx -d yourdomain.com -d www.yourdomain.com -d api.yourdomain.com
+certbot --nginx -d vezuroll.ru -d www.vezuroll.ru -d api.vezuroll.ru
 ```
 
 Следуйте инструкциям:
