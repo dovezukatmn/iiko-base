@@ -126,21 +126,21 @@ iiko-base/
 ### Backend (.env)
 
 ```ini
-DATABASE_URL=postgresql://iiko_user:password@localhost:5432/iiko_db
+DATABASE_URL=postgresql://iiko_user:12101991Qq!@localhost:5432/iiko_db
 SECRET_KEY=your-secret-key
-BACKEND_CORS_ORIGINS=["https://yourdomain.com"]
+BACKEND_CORS_ORIGINS=["https://vezuroll.ru", "https://b1d8d8270d0f.vps.myjino.ru"]
 ```
 
 ### Frontend (.env)
 
 ```ini
-APP_URL=https://yourdomain.com
+APP_URL=https://vezuroll.ru
 DB_CONNECTION=pgsql
 DB_HOST=127.0.0.1
 DB_DATABASE=iiko_db
 DB_USERNAME=iiko_user
-DB_PASSWORD=password
-BACKEND_API_URL=https://api.yourdomain.com/api/v1
+DB_PASSWORD=12101991Qq!
+BACKEND_API_URL=https://api.vezuroll.ru/api/v1
 ```
 
 ## 🌐 API Endpoints

@@ -3,8 +3,8 @@
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.config.settings import settings
-from backend.app.routes import api_router
+from config.settings import settings
+from app.routes import api_router
 
 # Создание приложения
 app = FastAPI(

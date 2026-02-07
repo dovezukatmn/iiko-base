@@ -4,8 +4,8 @@ API роуты
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
-from backend.database.connection import get_db
-from backend.database.models import MenuItem, User
+from database.connection import get_db
+from database.models import MenuItem, User
 
 api_router = APIRouter()
 
