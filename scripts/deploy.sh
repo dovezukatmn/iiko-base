@@ -79,9 +79,34 @@ php artisan view:cache
 cd ..
 
 # Применение миграций базы данных (Laravel)
-print_info "Применение миграций..."
+print_info "Проверка подключения к базе данных..."
 cd frontend
-php artisan migrate --force || print_warning "Миграции не выполнены"
+
+# Проверка подключения к БД перед миграциями
+if php artisan db:show 2>/dev/null >/dev/null; then
+    print_info "✓ Подключение к БД успешно"
+    print_info "Применение миграций..."
+    php artisan migrate --force || print_warning "Миграции не выполнены"
+else
+    print_warning "Не удалось подключиться к базе данных"
+    print_info "Проверьте настройки БД в файле .env:"
+    print_info "  - DB_HOST, DB_PORT, DB_DATABASE"
+    print_info "  - DB_USERNAME, DB_PASSWORD"
+    print_info ""
+    print_info "Убедитесь, что PostgreSQL запущен:"
+    print_info "  sudo systemctl status postgresql"
+    print_info ""
+    print_info "Создайте пользователя БД, если он не существует:"
+    print_info "  sudo -u postgres psql -c \"CREATE USER \$(grep DB_USERNAME .env | cut -d'=' -f2) WITH PASSWORD '\$(grep DB_PASSWORD .env | cut -d'=' -f2)';\""
+    print_info "  sudo -u postgres psql -c \"ALTER USER \$(grep DB_USERNAME .env | cut -d'=' -f2) CREATEDB;\""
+    print_info ""
+    print_info "Создайте базу данных, если она не существует:"
+    print_info "  sudo -u postgres createdb -O \$(grep DB_USERNAME .env | cut -d'=' -f2) \$(grep DB_DATABASE .env | cut -d'=' -f2)"
+    print_info ""
+    print_info "Подробная информация в docs/DATABASE_ERRORS.md"
+    print_warning "Пропуск миграций"
+fi
+
 cd ..
 
 # Настройка Nginx
