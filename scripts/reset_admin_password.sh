@@ -4,19 +4,20 @@
 
 echo "Resetting admin password to default (12101991Qq!)..."
 
-# Try to connect to local PostgreSQL
-PGPASSWORD="12101991Qq!" psql -h localhost -U iiko_user -d iiko_db -c "
+# Use single quotes for the SQL to avoid bash escaping issues
+# The hash should be passed as-is without any escaping
+PGPASSWORD="12101991Qq!" psql -h localhost -U iiko_user -d iiko_db << 'SQL'
 DELETE FROM users WHERE username = 'admin';
 INSERT INTO users (email, username, hashed_password, role, is_active, is_superuser)
 VALUES (
     'admin@example.com',
     'admin',
-    '\$2b\$12\$y4QVNPhuZfpLp1.xM6.NSeDnpD6I/wm.dSOXGrxV.HtXj6izHJLPa',
+    '$2b$12$y4QVNPhuZfpLp1.xM6.NSeDnpD6I/wm.dSOXGrxV.HtXj6izHJLPa',
     'admin',
     TRUE,
     TRUE
 );
-"
+SQL
 
 if [ $? -eq 0 ]; then
     echo "✓ Admin password reset successfully!"
