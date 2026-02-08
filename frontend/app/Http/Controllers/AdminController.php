@@ -2,15 +2,20 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Middleware\EnsureAdminSession;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 
 class AdminController extends Controller
 {
+    public const COOKIE_TOKEN = 'admin_token';
+    public const COOKIE_USERNAME = 'admin_username';
+    private const DEFAULT_COOKIE_LIFETIME_MINUTES = 120;
     private string $apiBase;
 
     public function __construct()
@@ -48,15 +53,21 @@ class AdminController extends Controller
         }
 
         $token = $response->json('access_token');
-        if (!$this->isValidJwt($token)) {
+        if (!self::isValidJwt($token)) {
             return back()->withErrors(['auth' => 'Получен некорректный токен от сервера'])->withInput();
         }
 
+        $request->session()->regenerate();
         $request->session()->put('token', $token);
         $request->session()->put('username', $validated['username']);
 
+        $this->queueAuthCookie($request, self::COOKIE_TOKEN, $token);
+        $this->queueAuthCookie($request, self::COOKIE_USERNAME, $validated['username']);
+
         try {
-            $meResponse = Http::withToken($token)->timeout(10)->get("{$this->apiBase}/auth/me");
+            $meResponse = Http::withToken($token)
+                ->timeout(EnsureAdminSession::TOKEN_CHECK_TIMEOUT)
+                ->get("{$this->apiBase}/auth/me");
             if ($meResponse->ok()) {
                 $request->session()->put('user', $meResponse->json());
             }
@@ -94,6 +105,8 @@ class AdminController extends Controller
         $request->session()->forget(['token', 'user', 'username']);
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+        cookie()->queue(cookie()->forget(self::COOKIE_TOKEN));
+        cookie()->queue(cookie()->forget(self::COOKIE_USERNAME));
 
         return redirect()->route('login')->with('status', 'Вы успешно вышли из системы');
     }
@@ -226,8 +239,44 @@ class AdminController extends Controller
         }
     }
 
-    private function isValidJwt(?string $token): bool
+    public static function isValidJwt(?string $token): bool
     {
         return is_string($token) && substr_count($token, '.') === 2;
+    }
+
+    private function queueAuthCookie(Request $request, string $name, string $value): void
+    {
+        $configuredLifetime = config('session.lifetime');
+        $cookieMinutes = is_numeric($configuredLifetime)
+            ? (int) $configuredLifetime
+            : self::DEFAULT_COOKIE_LIFETIME_MINUTES;
+        if ($cookieMinutes <= 0) {
+            Log::warning('Некорректное значение session.lifetime, используется значение по умолчанию', [
+                'configured' => $configuredLifetime,
+            ]);
+            $cookieMinutes = self::DEFAULT_COOKIE_LIFETIME_MINUTES;
+        }
+        $cookieDomain = config('session.domain');
+        $cookieSecure = config('session.secure');
+        if (app()->environment('production')) {
+            if ($cookieSecure === false) {
+                Log::warning('SESSION_SECURE_COOKIE отключен, но в production устанавливается secure cookie для токена.');
+            }
+            $cookieSecure = true;
+        } elseif ($cookieSecure === null) {
+            $cookieSecure = $request->isSecure();
+        }
+        $cookieSameSite = config('session.same_site', 'lax');
+
+        cookie()->queue(cookie(
+            name: $name,
+            value: Crypt::encryptString($value),
+            minutes: $cookieMinutes,
+            path: '/',
+            domain: $cookieDomain,
+            secure: $cookieSecure,
+            httpOnly: true,
+            sameSite: $cookieSameSite
+        ));
     }
 }
