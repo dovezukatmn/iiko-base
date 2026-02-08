@@ -586,12 +586,13 @@ sudo reboot
     -H "Content-Type: application/json" \
     -d '{"email":"<ADMIN_EMAIL>","username":"<ADMIN_USERNAME>","password":"<YOUR_SECURE_PASSWORD>"}'
   ```
-  Затем назначьте ему роль `admin` в базе данных:
+  Затем назначьте ему роль `admin` в базе данных (подставьте свои значения для `<DB_USER>`, `<DB_NAME>`, `<ADMIN_USERNAME>`, `<ADMIN_EMAIL>`):
   ```bash
-  psql -h localhost -U iiko_user -d iiko_db \
-    -c "UPDATE users SET role='admin' WHERE username='<ADMIN_USERNAME>' AND email='<ADMIN_EMAIL>';"
+  psql -h localhost -U <DB_USER> -d <DB_NAME> \
+    -v uname='<ADMIN_USERNAME>' -v email='<ADMIN_EMAIL>' \
+    -c "UPDATE users SET role='admin' WHERE username = :'uname' AND email = :'email';"
   ```
-- Подставляйте свои значения `<ADMIN_USERNAME>` и `<ADMIN_EMAIL>` вручную; не используйте непроверенные данные в SQL-команде и применяйте параметризованные запросы, если автоматизируете этот шаг.
+- Подставляйте свои значения `<ADMIN_USERNAME>` и `<ADMIN_EMAIL>` вручную; не используйте непроверенные данные в SQL-команде и применяйте параметризованные запросы (или `psql -v`, как выше), если автоматизируете этот шаг.
 - После этого авторизуйтесь на `/login` под логином `<ADMIN_USERNAME>` и выбранным вами паролем, и вы будете перенаправлены на `/admin`.
 
 ### Можно ли использовать для коммерческих проектов?
