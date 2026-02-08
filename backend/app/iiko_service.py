@@ -116,3 +116,66 @@ class IikoService:
             "/stop_lists",
             json_data={"organizationIds": [organization_id]},
         )
+
+    async def get_terminal_groups(self, organization_ids: list) -> dict:
+        """Получить терминальные группы (точки/заведения)"""
+        if not self._token:
+            await self.authenticate()
+        return await self._request(
+            "POST",
+            "/terminal_groups",
+            json_data={"organizationIds": organization_ids},
+        )
+
+    async def get_payment_types(self, organization_ids: list) -> dict:
+        """Получить доступные типы оплат"""
+        if not self._token:
+            await self.authenticate()
+        return await self._request(
+            "POST",
+            "/payment_types",
+            json_data={"organizationIds": organization_ids},
+        )
+
+    async def get_couriers(self, organization_id: str) -> dict:
+        """Получить список курьеров"""
+        if not self._token:
+            await self.authenticate()
+        return await self._request(
+            "POST",
+            "/employees/couriers",
+            json_data={"organizationId": organization_id},
+        )
+
+    async def get_order_types(self, organization_ids: list) -> dict:
+        """Получить типы заказов"""
+        if not self._token:
+            await self.authenticate()
+        return await self._request(
+            "POST",
+            "/deliveries/order_types",
+            json_data={"organizationIds": organization_ids},
+        )
+
+    async def get_discount_types(self, organization_ids: list) -> dict:
+        """Получить типы скидок"""
+        if not self._token:
+            await self.authenticate()
+        return await self._request(
+            "POST",
+            "/discounts",
+            json_data={"organizationIds": organization_ids},
+        )
+
+    async def register_webhook(self, webhook_url: str, auth_token: str) -> dict:
+        """Зарегистрировать вебхук в iiko"""
+        if not self._token:
+            await self.authenticate()
+        return await self._request(
+            "POST",
+            "/webhooks/update_settings",
+            json_data={
+                "webHooksUri": webhook_url,
+                "authToken": auth_token,
+            },
+        )

@@ -4,10 +4,12 @@ API роуты
 import json
 import logging
 import secrets
+import time
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
+from sqlalchemy import func as sa_func
 from typing import List as TypingList
 from database.connection import get_db
 from database.models import (
@@ -25,6 +27,8 @@ from app.auth import (
 )
 from app.iiko_service import IikoService
 from config.settings import settings
+
+_app_start_time = time.time()
 
 api_router = APIRouter()
 
@@ -419,3 +423,185 @@ async def get_api_logs(
 ):
     """Получить журнал запросов к iiko API"""
     return db.query(ApiLog).order_by(ApiLog.created_at.desc()).offset(skip).limit(limit).all()
+
+
+# ─── Server Status / Maintenance ─────────────────────────────────────────
+@api_router.get("/status", tags=["maintenance"])
+async def get_server_status(db: Session = Depends(get_db)):
+    """Статус сервера и компонентов"""
+    uptime = int(time.time() - _app_start_time)
+    # Check DB connection
+    db_ok = True
+    try:
+        db.execute(sa_func.now())
+    except Exception:
+        db_ok = False
+
+    # Counts
+    total_orders = db.query(sa_func.count(Order.id)).scalar() or 0
+    total_webhooks = db.query(sa_func.count(WebhookEvent.id)).scalar() or 0
+    total_logs = db.query(sa_func.count(ApiLog.id)).scalar() or 0
+    total_users = db.query(sa_func.count(User.id)).scalar() or 0
+    total_settings = db.query(sa_func.count(IikoSettings.id)).scalar() or 0
+
+    # Recent errors from API logs
+    recent_errors = (
+        db.query(ApiLog)
+        .filter(ApiLog.response_status >= 400)
+        .order_by(ApiLog.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    errors = [
+        {
+            "id": e.id,
+            "method": e.method,
+            "url": e.url,
+            "status": e.response_status,
+            "duration_ms": e.duration_ms,
+            "created_at": str(e.created_at) if e.created_at else None,
+        }
+        for e in recent_errors
+    ]
+
+    return {
+        "server": {
+            "status": "running",
+            "uptime_seconds": uptime,
+            "version": "1.0.0",
+        },
+        "components": {
+            "database": {"status": "ok" if db_ok else "error"},
+            "iiko_api": {"configured": total_settings > 0},
+        },
+        "stats": {
+            "orders": total_orders,
+            "webhook_events": total_webhooks,
+            "api_logs": total_logs,
+            "users": total_users,
+            "iiko_settings": total_settings,
+        },
+        "recent_errors": errors,
+    }
+
+
+@api_router.post("/iiko/terminal-groups", tags=["iiko"])
+async def get_iiko_terminal_groups(
+    setting_id: int,
+    organization_id: str,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Получить терминальные группы (точки/заведения)"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+    svc = IikoService(db, rec)
+    return await svc.get_terminal_groups([organization_id])
+
+
+@api_router.post("/iiko/payment-types", tags=["iiko"])
+async def get_iiko_payment_types(
+    setting_id: int,
+    organization_id: str,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Получить доступные типы оплат"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+    svc = IikoService(db, rec)
+    return await svc.get_payment_types([organization_id])
+
+
+@api_router.post("/iiko/couriers", tags=["iiko"])
+async def get_iiko_couriers(
+    setting_id: int,
+    organization_id: str,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Получить список курьеров"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+    svc = IikoService(db, rec)
+    return await svc.get_couriers(organization_id)
+
+
+@api_router.post("/iiko/order-types", tags=["iiko"])
+async def get_iiko_order_types(
+    setting_id: int,
+    organization_id: str,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Получить типы заказов"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+    svc = IikoService(db, rec)
+    return await svc.get_order_types([organization_id])
+
+
+@api_router.post("/iiko/discount-types", tags=["iiko"])
+async def get_iiko_discount_types(
+    setting_id: int,
+    organization_id: str,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Получить типы скидок"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+    svc = IikoService(db, rec)
+    return await svc.get_discount_types([organization_id])
+
+
+@api_router.post("/iiko/register-webhook", tags=["iiko"])
+async def register_iiko_webhook(
+    setting_id: int,
+    webhook_url: str,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("admin")),
+):
+    """Зарегистрировать вебхук в iiko и сохранить настройки"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+
+    auth_token = secrets.token_urlsafe(32)
+    svc = IikoService(db, rec)
+    try:
+        result = await svc.register_webhook(webhook_url, auth_token)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Ошибка регистрации вебхука: {str(e)}")
+
+    rec.webhook_url = webhook_url
+    rec.webhook_secret = auth_token
+    db.commit()
+    db.refresh(rec)
+
+    return {
+        "status": "ok",
+        "webhook_url": webhook_url,
+        "auth_token": auth_token,
+        "iiko_response": result,
+    }
+
+
+@api_router.post("/iiko/stop-lists", tags=["iiko"])
+async def get_iiko_stop_lists(
+    setting_id: int,
+    organization_id: str,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Получить стоп-листы"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+    svc = IikoService(db, rec)
+    return await svc.get_stop_lists(organization_id)

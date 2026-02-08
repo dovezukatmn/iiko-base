@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -77,6 +78,17 @@ class AdminController extends Controller
         ]);
     }
 
+    public function maintenance(Request $request): View
+    {
+        return view('admin.maintenance', [
+            'user' => $request->session()->get('user'),
+            'username' => $request->session()->get('username'),
+            'displayName' => $request->session()->get('user.username')
+                ?? $request->session()->get('username')
+                ?? 'администратор',
+        ]);
+    }
+
     public function logout(Request $request): RedirectResponse
     {
         $request->session()->forget(['token', 'user', 'username']);
@@ -84,6 +96,134 @@ class AdminController extends Controller
         $request->session()->regenerateToken();
 
         return redirect()->route('login')->with('status', 'Вы успешно вышли из системы');
+    }
+
+    // ─── API Proxy Methods ──────────────────────────────────────────────
+
+    public function apiStatus(Request $request): JsonResponse
+    {
+        return $this->proxyGet($request, '/status');
+    }
+
+    public function apiIikoSettings(Request $request): JsonResponse
+    {
+        return $this->proxyGet($request, '/iiko/settings');
+    }
+
+    public function apiCreateIikoSettings(Request $request): JsonResponse
+    {
+        return $this->proxyPost($request, '/iiko/settings', $request->all());
+    }
+
+    public function apiUpdateIikoSettings(Request $request, int $id): JsonResponse
+    {
+        return $this->proxyPut($request, "/iiko/settings/{$id}", $request->all());
+    }
+
+    public function apiTestConnection(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        return $this->proxyPost($request, "/iiko/test-connection?setting_id={$settingId}");
+    }
+
+    public function apiOrganizations(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        return $this->proxyPost($request, "/iiko/organizations?setting_id={$settingId}");
+    }
+
+    public function apiTerminalGroups(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        $orgId = $request->input('organization_id');
+        return $this->proxyPost($request, "/iiko/terminal-groups?setting_id={$settingId}&organization_id={$orgId}");
+    }
+
+    public function apiPaymentTypes(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        $orgId = $request->input('organization_id');
+        return $this->proxyPost($request, "/iiko/payment-types?setting_id={$settingId}&organization_id={$orgId}");
+    }
+
+    public function apiCouriers(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        $orgId = $request->input('organization_id');
+        return $this->proxyPost($request, "/iiko/couriers?setting_id={$settingId}&organization_id={$orgId}");
+    }
+
+    public function apiOrderTypes(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        $orgId = $request->input('organization_id');
+        return $this->proxyPost($request, "/iiko/order-types?setting_id={$settingId}&organization_id={$orgId}");
+    }
+
+    public function apiDiscountTypes(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        $orgId = $request->input('organization_id');
+        return $this->proxyPost($request, "/iiko/discount-types?setting_id={$settingId}&organization_id={$orgId}");
+    }
+
+    public function apiStopLists(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        $orgId = $request->input('organization_id');
+        return $this->proxyPost($request, "/iiko/stop-lists?setting_id={$settingId}&organization_id={$orgId}");
+    }
+
+    public function apiRegisterWebhook(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        $webhookUrl = $request->input('webhook_url');
+        return $this->proxyPost($request, "/iiko/register-webhook?setting_id={$settingId}&webhook_url=" . urlencode($webhookUrl));
+    }
+
+    public function apiWebhookEvents(Request $request): JsonResponse
+    {
+        return $this->proxyGet($request, '/webhooks/events');
+    }
+
+    public function apiLogs(Request $request): JsonResponse
+    {
+        return $this->proxyGet($request, '/logs');
+    }
+
+    // ─── Helpers ─────────────────────────────────────────────────────────
+
+    private function proxyGet(Request $request, string $path): JsonResponse
+    {
+        $token = $request->session()->get('token');
+        try {
+            $response = Http::withToken($token)->timeout(15)->get("{$this->apiBase}{$path}");
+            return response()->json($response->json(), $response->status());
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'Ошибка подключения к API: ' . $e->getMessage()], 502);
+        }
+    }
+
+    private function proxyPost(Request $request, string $path, array $body = []): JsonResponse
+    {
+        $token = $request->session()->get('token');
+        try {
+            $response = Http::withToken($token)->timeout(15)->post("{$this->apiBase}{$path}", $body);
+            return response()->json($response->json(), $response->status());
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'Ошибка подключения к API: ' . $e->getMessage()], 502);
+        }
+    }
+
+    private function proxyPut(Request $request, string $path, array $body = []): JsonResponse
+    {
+        $token = $request->session()->get('token');
+        try {
+            $response = Http::withToken($token)->timeout(15)->put("{$this->apiBase}{$path}", $body);
+            return response()->json($response->json(), $response->status());
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'Ошибка подключения к API: ' . $e->getMessage()], 502);
+        }
     }
 
     private function isValidJwt(?string $token): bool
