@@ -86,6 +86,7 @@ sudo ./scripts/deploy.sh
 - **[Архитектура проекта](docs/ARCHITECTURE.md)** - как все устроено
 
 ### Устранение проблем
+- **[Исправление 500 в админке](docs/500_ADMIN_PANEL_ERROR.md)** - что делать при 500 Server Error на /admin
 - **[Быстрое решение 502](QUICK_FIX_502.md)** - самые частые проблемы
 - **[Решение ошибки 502 Bad Gateway](docs/502_ERROR_FIX.md)** - если сайт не открывается
 - **[Устранение ошибок БД](docs/DATABASE_ERRORS.md)** - решение проблем с PostgreSQL
