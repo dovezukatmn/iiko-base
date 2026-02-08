@@ -198,7 +198,9 @@
                 </div>
                 <button type="submit">Войти в админку</button>
             </form>
-            <p class="footer">API: {{ env('BACKEND_API_URL', 'http://localhost:8000/api/v1') }}</p>
+            @env('local')
+                <p class="footer">API: {{ config('app.backend_api_url') }}</p>
+            @endenv
         </section>
     </div>
 </body>

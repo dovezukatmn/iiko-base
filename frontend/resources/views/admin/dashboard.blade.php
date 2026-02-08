@@ -116,7 +116,7 @@
             <div class="logo">IB</div>
             <div>
                 <h1>Админ-панель</h1>
-                <div class="muted">Добро пожаловать, {{ $user['username'] ?? $username ?? 'администратор' }}</div>
+                <div class="muted">Добро пожаловать, {{ $displayName }}</div>
             </div>
         </div>
         <form method="POST" action="{{ route('logout') }}">
