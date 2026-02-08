@@ -1,21 +1,121 @@
 """
 API роуты
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+import json
+import logging
+import secrets
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List as TypingList
 from database.connection import get_db
-from database.models import MenuItem, User
+from database.models import (
+    MenuItem, User, IikoSettings, Order, WebhookEvent, ApiLog,
+)
+from app.schemas import (
+    UserCreate, UserLogin, UserResponse, Token, RoleUpdate,
+    IikoSettingsCreate, IikoSettingsResponse, IikoSettingsUpdate,
+    OrderResponse, OrderCreate, PasswordChange,
+    WebhookEventResponse, ApiLogResponse,
+)
+from app.auth import (
+    get_password_hash, verify_password, create_access_token,
+    get_current_user, require_role,
+)
+from app.iiko_service import IikoService
+from config.settings import settings
 
 api_router = APIRouter()
 
 
-# Роуты для меню
+# ─── Auth ────────────────────────────────────────────────────────────────
+@api_router.post("/auth/register", tags=["auth"], response_model=UserResponse)
+async def register(user_in: UserCreate, db: Session = Depends(get_db)):
+    """Регистрация нового пользователя"""
+    if db.query(User).filter(User.email == user_in.email).first():
+        raise HTTPException(status_code=400, detail="Email уже зарегистрирован")
+    if db.query(User).filter(User.username == user_in.username).first():
+        raise HTTPException(status_code=400, detail="Имя пользователя занято")
+    user = User(
+        email=user_in.email,
+        username=user_in.username,
+        hashed_password=get_password_hash(user_in.password),
+        role="viewer",
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@api_router.post("/auth/login", tags=["auth"], response_model=Token)
+async def login(form: UserLogin, db: Session = Depends(get_db)):
+    """Авторизация пользователя (получение JWT)"""
+    user = db.query(User).filter(User.username == form.username).first()
+    if not user or not verify_password(form.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Неверные учетные данные")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Пользователь деактивирован")
+    token = create_access_token(data={"sub": user.username, "role": user.role})
+    return {"access_token": token}
+
+
+@api_router.get("/auth/me", tags=["auth"], response_model=UserResponse)
+async def me(current_user: User = Depends(get_current_user)):
+    """Текущий пользователь"""
+    return current_user
+
+
+@api_router.put("/auth/password", tags=["auth"])
+async def change_password(
+    data: PasswordChange,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Смена пароля"""
+    if not verify_password(data.old_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Неверный текущий пароль")
+    current_user.hashed_password = get_password_hash(data.new_password)
+    db.commit()
+    return {"detail": "Пароль изменен"}
+
+
+# ─── Users (admin) ──────────────────────────────────────────────────────
+@api_router.get("/users", tags=["users"], response_model=TypingList[UserResponse])
+async def get_users(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("admin")),
+):
+    """Получить список пользователей (только admin)"""
+    return db.query(User).offset(skip).limit(limit).all()
+
+
+@api_router.put("/users/{user_id}/role", tags=["users"], response_model=UserResponse)
+async def update_user_role(
+    user_id: int,
+    role_update: RoleUpdate,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("admin")),
+):
+    """Изменить роль пользователя (только admin)"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    user.role = role_update.role
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+# ─── Menu ────────────────────────────────────────────────────────────────
 @api_router.get("/menu", tags=["menu"])
 async def get_menu_items(
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Получить список элементов меню"""
     items = db.query(MenuItem).filter(MenuItem.is_available == True).offset(skip).limit(limit).all()
@@ -28,15 +128,11 @@ async def create_menu_item(
     description: str = None,
     price: int = 0,
     category: str = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("manager")),
 ):
-    """Создать новый элемент меню"""
-    item = MenuItem(
-        name=name,
-        description=description,
-        price=price,
-        category=category
-    )
+    """Создать новый элемент меню (manager+)"""
+    item = MenuItem(name=name, description=description, price=price, category=category)
     db.add(item)
     db.commit()
     db.refresh(item)
@@ -52,13 +148,274 @@ async def get_menu_item(item_id: int, db: Session = Depends(get_db)):
     return item
 
 
-# Роуты для пользователей
-@api_router.get("/users", tags=["users"])
-async def get_users(
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db)
+# ─── iiko Settings ───────────────────────────────────────────────────────
+@api_router.get("/iiko/settings", tags=["iiko"], response_model=TypingList[IikoSettingsResponse])
+async def get_iiko_settings(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("admin")),
 ):
-    """Получить список пользователей"""
-    users = db.query(User).offset(skip).limit(limit).all()
-    return {"users": users, "total": len(users)}
+    """Получить настройки интеграции iiko"""
+    return db.query(IikoSettings).all()
+
+
+@api_router.post("/iiko/settings", tags=["iiko"], response_model=IikoSettingsResponse, status_code=201)
+async def create_iiko_settings(
+    data: IikoSettingsCreate,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("admin")),
+):
+    """Создать настройку интеграции iiko"""
+    webhook_secret = secrets.token_urlsafe(32)
+    rec = IikoSettings(
+        api_key=data.api_key,
+        api_url=data.api_url,
+        organization_id=data.organization_id,
+        webhook_secret=webhook_secret,
+    )
+    if settings.WEBHOOK_BASE_URL:
+        rec.webhook_url = f"{settings.WEBHOOK_BASE_URL.rstrip('/')}{settings.API_V1_PREFIX}/webhooks/iiko"
+    db.add(rec)
+    db.commit()
+    db.refresh(rec)
+    return rec
+
+
+@api_router.put("/iiko/settings/{setting_id}", tags=["iiko"], response_model=IikoSettingsResponse)
+async def update_iiko_settings(
+    setting_id: int,
+    data: IikoSettingsUpdate,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("admin")),
+):
+    """Обновить настройку интеграции iiko"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+    if data.api_key is not None:
+        rec.api_key = data.api_key
+    if data.api_url is not None:
+        rec.api_url = data.api_url
+    if data.organization_id is not None:
+        rec.organization_id = data.organization_id
+    db.commit()
+    db.refresh(rec)
+    return rec
+
+
+@api_router.post("/iiko/test-connection", tags=["iiko"])
+async def test_iiko_connection(
+    setting_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("admin")),
+):
+    """Тестовое подключение к iiko API"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+    try:
+        svc = IikoService(db, rec)
+        token = await svc.authenticate()
+        return {"status": "ok", "message": "Подключение успешно"}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Ошибка подключения: {str(e)}")
+
+
+# ─── iiko Data ───────────────────────────────────────────────────────────
+@api_router.post("/iiko/organizations", tags=["iiko"])
+async def get_iiko_organizations(
+    setting_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Получить список организаций из iiko"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+    svc = IikoService(db, rec)
+    return await svc.get_organizations()
+
+
+@api_router.post("/iiko/menu", tags=["iiko"])
+async def get_iiko_menu(
+    setting_id: int,
+    organization_id: str,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Получить меню из iiko"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+    svc = IikoService(db, rec)
+    return await svc.get_menu(organization_id)
+
+
+# ─── Sync ────────────────────────────────────────────────────────────────
+@api_router.post("/iiko/sync-menu", tags=["iiko"])
+async def sync_menu_from_iiko(
+    setting_id: int,
+    organization_id: str,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("manager")),
+):
+    """Синхронизировать меню из iiko в локальную БД"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+    svc = IikoService(db, rec)
+    menu_data = await svc.get_menu(organization_id)
+
+    synced = 0
+    products = menu_data.get("products", [])
+    for product in products:
+        existing = db.query(MenuItem).filter(MenuItem.name == product.get("name")).first()
+        price = 0
+        sizes = product.get("sizePrices", [])
+        if sizes:
+            price_val = sizes[0].get("price", {})
+            if isinstance(price_val, dict):
+                price = int(float(price_val.get("currentPrice", 0)) * 100)
+            else:
+                price = int(float(price_val) * 100)
+        if existing:
+            existing.price = price
+            existing.description = product.get("description", "")
+            existing.is_available = True
+        else:
+            db.add(MenuItem(
+                name=product.get("name", ""),
+                description=product.get("description", ""),
+                price=price,
+                category=product.get("groupId", ""),
+                is_available=True,
+            ))
+        synced += 1
+    db.commit()
+    return {"detail": f"Синхронизировано {synced} позиций"}
+
+
+# ─── Orders ──────────────────────────────────────────────────────────────
+@api_router.get("/orders", tags=["orders"], response_model=TypingList[OrderResponse])
+async def get_orders(
+    status_filter: str = None,
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Получить список заказов (мониторинг)"""
+    q = db.query(Order)
+    if status_filter:
+        q = q.filter(Order.status == status_filter)
+    return q.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
+
+
+@api_router.post("/orders", tags=["orders"], response_model=OrderResponse, status_code=201)
+async def create_order(
+    order_in: OrderCreate,
+    setting_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Создать заказ (и отправить в iiko)"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка iiko не найдена")
+
+    order = Order(
+        organization_id=order_in.organization_id,
+        customer_name=order_in.customer_name,
+        customer_phone=order_in.customer_phone,
+        delivery_address=order_in.delivery_address,
+        order_data=json.dumps(order_in.items),
+        status="new",
+    )
+    db.add(order)
+    db.commit()
+    db.refresh(order)
+
+    # Отправить в iiko
+    try:
+        svc = IikoService(db, rec)
+        iiko_resp = await svc.create_order(order_in.organization_id, {"items": order_in.items})
+        iiko_id = iiko_resp.get("orderInfo", {}).get("id")
+        if iiko_id:
+            order.iiko_order_id = iiko_id
+            order.status = "confirmed"
+            db.commit()
+            db.refresh(order)
+    except Exception as e:
+        logger.warning("Failed to send order %d to iiko: %s", order.id, e)
+
+    return order
+
+
+@api_router.get("/orders/{order_id}", tags=["orders"], response_model=OrderResponse)
+async def get_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Получить заказ по ID"""
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Заказ не найден")
+    return order
+
+
+# ─── Webhooks ────────────────────────────────────────────────────────────
+@api_router.post("/webhooks/iiko", tags=["webhooks"])
+async def iiko_webhook(request: Request, db: Session = Depends(get_db)):
+    """Прием вебхуков от iiko"""
+    body = await request.body()
+    try:
+        payload = json.loads(body)
+    except Exception as e:
+        logger.warning("Failed to parse webhook JSON: %s", e)
+        payload = {"raw": body.decode("utf-8", errors="replace"), "parse_error": str(e)}
+
+    event_type = payload.get("eventType", "unknown")
+    event = WebhookEvent(
+        event_type=event_type,
+        payload=json.dumps(payload),
+        processed=False,
+    )
+    db.add(event)
+    db.commit()
+
+    # Обработка событий по статусам заказов
+    if event_type in ("DeliveryOrderUpdate", "DeliveryOrderError"):
+        order_id = payload.get("eventInfo", {}).get("id")
+        new_status = payload.get("eventInfo", {}).get("status", "")
+        if order_id:
+            order = db.query(Order).filter(Order.iiko_order_id == order_id).first()
+            if order:
+                order.status = new_status
+                db.commit()
+        event.processed = True
+        db.commit()
+
+    return {"status": "ok"}
+
+
+@api_router.get("/webhooks/events", tags=["webhooks"], response_model=TypingList[WebhookEventResponse])
+async def get_webhook_events(
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("manager")),
+):
+    """Получить историю вебхук-событий"""
+    return db.query(WebhookEvent).order_by(WebhookEvent.created_at.desc()).offset(skip).limit(limit).all()
+
+
+# ─── API Logs ────────────────────────────────────────────────────────────
+@api_router.get("/logs", tags=["logs"], response_model=TypingList[ApiLogResponse])
+async def get_api_logs(
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("admin")),
+):
+    """Получить журнал запросов к iiko API"""
+    return db.query(ApiLog).order_by(ApiLog.created_at.desc()).offset(skip).limit(limit).all()
