@@ -2,8 +2,11 @@
 API роуты
 """
 import json
+import logging
 import secrets
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
 from typing import List as TypingList
 from database.connection import get_db
@@ -13,7 +16,7 @@ from database.models import (
 from app.schemas import (
     UserCreate, UserLogin, UserResponse, Token, RoleUpdate,
     IikoSettingsCreate, IikoSettingsResponse, IikoSettingsUpdate,
-    OrderResponse, OrderCreate,
+    OrderResponse, OrderCreate, PasswordChange,
     WebhookEventResponse, ApiLogResponse,
 )
 from app.auth import (
@@ -66,15 +69,14 @@ async def me(current_user: User = Depends(get_current_user)):
 
 @api_router.put("/auth/password", tags=["auth"])
 async def change_password(
-    old_password: str,
-    new_password: str,
+    data: PasswordChange,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Смена пароля"""
-    if not verify_password(old_password, current_user.hashed_password):
+    if not verify_password(data.old_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Неверный текущий пароль")
-    current_user.hashed_password = get_password_hash(new_password)
+    current_user.hashed_password = get_password_hash(data.new_password)
     db.commit()
     return {"detail": "Пароль изменен"}
 
@@ -342,8 +344,8 @@ async def create_order(
             order.status = "confirmed"
             db.commit()
             db.refresh(order)
-    except Exception:
-        pass  # Заказ создан локально даже если iiko недоступна
+    except Exception as e:
+        logger.warning("Failed to send order %d to iiko: %s", order.id, e)
 
     return order
 
@@ -368,8 +370,9 @@ async def iiko_webhook(request: Request, db: Session = Depends(get_db)):
     body = await request.body()
     try:
         payload = json.loads(body)
-    except Exception:
-        payload = {"raw": body.decode("utf-8", errors="replace")}
+    except Exception as e:
+        logger.warning("Failed to parse webhook JSON: %s", e)
+        payload = {"raw": body.decode("utf-8", errors="replace"), "parse_error": str(e)}
 
     event_type = payload.get("eventType", "unknown")
     event = WebhookEvent(

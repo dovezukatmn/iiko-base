@@ -90,6 +90,11 @@ class OrderCreate(BaseModel):
     items: List[dict]  # List of iiko order items
 
 
+class PasswordChange(BaseModel):
+    old_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=6, max_length=128)
+
+
 # --- Webhook ---
 class WebhookEventResponse(BaseModel):
     id: int
