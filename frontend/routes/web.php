@@ -14,8 +14,8 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::get('/', [AdminController::class, 'showLogin'])->name('login');
-Route::get('/login', [AdminController::class, 'showLogin']);
+Route::redirect('/', '/login');
+Route::get('/login', [AdminController::class, 'showLogin'])->name('login');
 Route::post('/login', [AdminController::class, 'login'])->name('login.submit');
 Route::middleware('admin.session')->group(function () {
     Route::get('/admin', [AdminController::class, 'dashboard'])->name('admin.dashboard');
