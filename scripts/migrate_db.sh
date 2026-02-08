@@ -158,7 +158,8 @@ CONNECTION_STATUS=$?
 if [ $CONNECTION_STATUS -ne 0 ]; then
     print_error "Не удалось подключиться к базе данных"
     if [ -n "$CONNECTION_ERROR" ]; then
-        echo "$CONNECTION_ERROR"
+        # Фильтруем чувствительные данные (пароли, токены) из вывода ошибки
+        echo "$CONNECTION_ERROR" | grep -v -i 'password' | head -n 5
     fi
     echo ""
     print_info "Проверьте параметры подключения:"
@@ -208,7 +209,8 @@ MIGRATION_STATUS=$?
 
 if [ $MIGRATION_STATUS -ne 0 ]; then
     print_error "Ошибка при выполнении миграции:"
-    echo "$MIGRATION_OUTPUT"
+    # Показываем только строки с ошибками, без чувствительных данных
+    echo "$MIGRATION_OUTPUT" | grep -i -E '(ERROR|FATAL|error|fatal)' | head -n 10
     unset PGPASSWORD
     unset PGCONNECT_TIMEOUT
     exit 1

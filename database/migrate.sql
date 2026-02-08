@@ -136,7 +136,7 @@ CREATE INDEX IF NOT EXISTS idx_api_logs_created_at ON api_logs(created_at);
 
 COMMIT;
 
--- ─── Результат ──────────────────────────────────────────────────────────
--- Выводим список таблиц для подтверждения
+-- ─── Результат (информационный запрос, не часть транзакции миграции) ────
+-- Выводим список таблиц для подтверждения успешности миграции
 SELECT table_name FROM information_schema.tables 
 WHERE table_schema = 'public' ORDER BY table_name;
