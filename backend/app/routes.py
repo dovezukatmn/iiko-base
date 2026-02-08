@@ -215,7 +215,7 @@ async def test_iiko_connection(
     try:
         svc = IikoService(db, rec)
         token = await svc.authenticate()
-        return {"status": "ok", "message": "Подключение успешно", "token_preview": token[:8] + "..."}
+        return {"status": "ok", "message": "Подключение успешно"}
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Ошибка подключения: {str(e)}")
 

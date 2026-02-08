@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from database.models import ApiLog, IikoSettings
 from config.settings import settings
 
+MAX_LOG_BODY_LENGTH = 2000
+
 
 class IikoService:
     """Коннектор для работы с iiko Cloud API"""
@@ -33,7 +35,7 @@ class IikoService:
             url=url,
             request_body=request_body,
             response_status=response_status,
-            response_body=response_body[:2000] if response_body else None,
+            response_body=response_body[:MAX_LOG_BODY_LENGTH] if response_body else None,
             duration_ms=duration_ms,
         )
         self.db.add(log)
