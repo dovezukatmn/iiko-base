@@ -92,45 +92,43 @@ if [ -f .env ]; then
     DB_USER=$(grep "^DB_USERNAME=" .env | cut -d'=' -f2 | tr -d ' ')
     DB_PASSWORD=$(grep "^DB_PASSWORD=" .env | cut -d'=' -f2 | tr -d ' ')
     DB_NAME=$(grep "^DB_DATABASE=" .env | cut -d'=' -f2 | tr -d ' ')
+    
+    # Проверка подключения к БД перед миграциями
+    # Используем прямое подключение к PostgreSQL без зависимостей Laravel
+    export PGPASSWORD="$DB_PASSWORD"
+    export PGCONNECT_TIMEOUT=5
+    
+    if timeout "$DB_CHECK_TIMEOUT" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c '\q' 2>/dev/null; then
+        print_info "✓ Подключение к БД успешно"
+        print_info "Применение миграций..."
+        php artisan migrate --force || print_warning "Миграции не выполнены"
+    else
+        print_warning "Не удалось подключиться к базе данных"
+        print_info "Проверьте настройки БД в файле .env:"
+        print_info "  - DB_HOST, DB_PORT, DB_DATABASE"
+        print_info "  - DB_USERNAME, DB_PASSWORD"
+        print_info ""
+        print_info "Убедитесь, что PostgreSQL запущен:"
+        print_info "  sudo systemctl status postgresql"
+        print_info ""
+        print_info "Создайте пользователя БД, если он не существует:"
+        print_info "  sudo -u postgres psql -c \"CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';\""
+        print_info "  sudo -u postgres psql -c \"ALTER USER $DB_USER CREATEDB;\""
+        print_info ""
+        print_info "Создайте базу данных, если она не существует:"
+        print_info "  sudo -u postgres createdb -O $DB_USER $DB_NAME"
+        print_info ""
+        print_info "Подробная информация в docs/DATABASE_ERRORS.md"
+        print_warning "Пропуск миграций"
+    fi
+    
+    # Очистка переменных окружения с паролем
+    unset PGPASSWORD
+    unset PGCONNECT_TIMEOUT
 else
     print_error "Файл .env не найден"
     print_warning "Пропуск миграций"
-    cd ..
-    exit 0
 fi
-
-# Проверка подключения к БД перед миграциями
-# Используем прямое подключение к PostgreSQL без зависимостей Laravel
-export PGPASSWORD="$DB_PASSWORD"
-export PGCONNECT_TIMEOUT=5
-
-if timeout "$DB_CHECK_TIMEOUT" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c '\q' 2>/dev/null; then
-    print_info "✓ Подключение к БД успешно"
-    print_info "Применение миграций..."
-    php artisan migrate --force || print_warning "Миграции не выполнены"
-else
-    print_warning "Не удалось подключиться к базе данных"
-    print_info "Проверьте настройки БД в файле .env:"
-    print_info "  - DB_HOST, DB_PORT, DB_DATABASE"
-    print_info "  - DB_USERNAME, DB_PASSWORD"
-    print_info ""
-    print_info "Убедитесь, что PostgreSQL запущен:"
-    print_info "  sudo systemctl status postgresql"
-    print_info ""
-    print_info "Создайте пользователя БД, если он не существует:"
-    print_info "  sudo -u postgres psql -c \"CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';\""
-    print_info "  sudo -u postgres psql -c \"ALTER USER $DB_USER CREATEDB;\""
-    print_info ""
-    print_info "Создайте базу данных, если она не существует:"
-    print_info "  sudo -u postgres createdb -O $DB_USER $DB_NAME"
-    print_info ""
-    print_info "Подробная информация в docs/DATABASE_ERRORS.md"
-    print_warning "Пропуск миграций"
-fi
-
-# Очистка переменных окружения с паролем
-unset PGPASSWORD
-unset PGCONNECT_TIMEOUT
 
 cd ..
 
