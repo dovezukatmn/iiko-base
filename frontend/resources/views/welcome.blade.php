@@ -4,7 +4,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>iiko-base Admin</title>
-        <meta http-equiv="refresh" content="3; url={{ e(route('login')) }}">
+        <meta http-equiv="refresh" content="0; url={{ e(route('login')) }}">
     </head>
     <body>
         <main>
