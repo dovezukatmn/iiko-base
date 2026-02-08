@@ -1,0 +1,128 @@
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃                                                                     ┃
+┃   🔐 ADMIN LOGIN QUICK FIX CARD                                     ┃
+┃                                                                     ┃
+┃   Problem: Can't login with "Неверные учетные данные" error       ┃
+┃                                                                     ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+╔═══════════════════════════════════════════════════════════════════╗
+║  QUICK FIX (2 minutes)                                            ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+1. Go to project directory:
+   $ cd /var/www/iiko-base
+
+2. Update code (includes bug fix):
+   $ git pull origin main
+
+3. Check database:
+   $ ./scripts/check_admin_db.sh
+
+4. Reset password (if needed):
+   $ ./scripts/reset_admin_password.sh
+
+5. Restart backend:
+   $ sudo systemctl restart iiko-backend
+   # OR for Docker:
+   $ docker-compose restart backend
+
+6. Login:
+   Username: admin
+   Password: 12101991Qq!
+
+7. ⚠️  CHANGE PASSWORD IMMEDIATELY!
+
+╔═══════════════════════════════════════════════════════════════════╗
+║  WHAT WAS FIXED                                                   ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+✅ Critical bug in login route (backend/app/routes.py)
+✅ Added diagnostic tools (check_admin_db.sh)
+✅ Enhanced documentation
+✅ Security verified (CodeQL: 0 issues)
+
+╔═══════════════════════════════════════════════════════════════════╗
+║  IF QUICK FIX DOESN'T WORK                                        ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+Check backend is running:
+  $ sudo systemctl status iiko-backend
+  $ docker-compose ps
+
+Test API directly:
+  $ curl -X POST http://localhost:8000/api/v1/auth/login \
+    -H "Content-Type: application/json" \
+    -d '{"username":"admin","password":"12101991Qq!"}'
+
+Check backend logs:
+  $ sudo journalctl -u iiko-backend -n 50
+  $ docker-compose logs backend --tail=50
+
+╔═══════════════════════════════════════════════════════════════════╗
+║  DETAILED GUIDES                                                  ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+📖 QUICK_ADMIN_LOGIN_FIX.md          - Quick reference guide
+📖 ADMIN_LOGIN_FIX_COMPLETE.md       - Complete summary
+📖 docs/ADMIN_LOGIN_ROOT_CAUSE.md    - Technical deep-dive
+📖 docs/ADMIN_LOGIN_TROUBLESHOOTING.md - Step-by-step troubleshooting
+📖 scripts/README.md                  - All scripts explained
+
+╔═══════════════════════════════════════════════════════════════════╗
+║  DIAGNOSTIC TOOLS                                                 ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+./scripts/check_admin_db.sh        - Check database (no Python needed) ⭐
+./scripts/test_password_hash.py    - Test bcrypt hashing
+./scripts/test_login_logic.py      - Test login scenarios
+./scripts/reset_admin_password.sh  - Reset to default password
+
+╔═══════════════════════════════════════════════════════════════════╗
+║  DEFAULT CREDENTIALS                                              ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+Username: admin
+Password: 12101991Qq!
+
+Expected Hash:
+$2b$12$y4QVNPhuZfpLp1.xM6.NSeDnpD6I/wm.dSOXGrxV.HtXj6izHJLPa
+
+⚠️  These are DEFAULT credentials meant for initial setup only!
+    CHANGE THE PASSWORD immediately after first login!
+
+╔═══════════════════════════════════════════════════════════════════╗
+║  NEED HELP?                                                       ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+1. Run diagnostics:
+   $ ./scripts/check_admin_db.sh > diagnostics.txt
+
+2. Check logs:
+   $ sudo journalctl -u iiko-backend -n 100 >> diagnostics.txt
+
+3. Create GitHub issue with diagnostics.txt
+
+╔═══════════════════════════════════════════════════════════════════╗
+║  COMMON ISSUES                                                    ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+❌ "File not found" for verify_admin_login.py
+   ✅ Use ./scripts/check_admin_db.sh instead
+
+❌ Password reset doesn't work
+   ✅ Make sure PostgreSQL is running
+   ✅ Update code to get the bug fix
+
+❌ Login fails after reset
+   ✅ Restart backend after database changes
+   ✅ Check backend logs for errors
+
+❌ Frontend shows login error
+   ✅ Check frontend .env has VITE_API_URL
+   ✅ Check CORS settings in backend
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃  This fix addresses GitHub Issue: Admin login authentication bug  ┃
+┃  Status: RESOLVED ✅                                               ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
