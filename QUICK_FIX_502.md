@@ -3,8 +3,8 @@
 ## Самое быстрое решение (90% случаев)
 
 ```bash
-sudo systemctl start php8.1-fpm
-sudo systemctl enable php8.1-fpm
+sudo systemctl start php8.3-fpm
+sudo systemctl enable php8.3-fpm
 sudo systemctl restart nginx
 ```
 
@@ -17,7 +17,7 @@ sudo systemctl restart nginx
 ### 1️⃣ Проверьте все сервисы
 
 ```bash
-sudo systemctl status php8.1-fpm
+sudo systemctl status php8.3-fpm
 sudo systemctl status iiko-backend
 sudo systemctl status nginx
 ```
@@ -26,7 +26,7 @@ sudo systemctl status nginx
 
 ```bash
 # PHP-FPM
-sudo systemctl start php8.1-fpm
+sudo systemctl start php8.3-fpm
 
 # Python Backend
 sudo systemctl start iiko-backend
@@ -42,7 +42,7 @@ sudo systemctl start nginx
 sudo tail -50 /var/log/nginx/error.log
 
 # Логи PHP-FPM
-sudo journalctl -u php8.1-fpm -n 50
+sudo journalctl -u php8.3-fpm -n 50
 
 # Логи Backend
 sudo journalctl -u iiko-backend -n 50
@@ -70,17 +70,17 @@ sudo ./scripts/deploy.sh
 
 **Проверка статуса всех сервисов:**
 ```bash
-sudo systemctl status php8.1-fpm iiko-backend nginx postgresql
+sudo systemctl status php8.3-fpm iiko-backend nginx postgresql
 ```
 
 **Перезапуск всех сервисов:**
 ```bash
-sudo systemctl restart php8.1-fpm iiko-backend nginx
+sudo systemctl restart php8.3-fpm iiko-backend nginx
 ```
 
 **Просмотр всех логов:**
 ```bash
 sudo tail -50 /var/log/nginx/error.log
-sudo journalctl -u php8.1-fpm -n 50
+sudo journalctl -u php8.3-fpm -n 50
 sudo journalctl -u iiko-backend -n 50
 ```

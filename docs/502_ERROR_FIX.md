@@ -24,7 +24,7 @@ nginx/1.24.0 (Ubuntu)
 
 ```bash
 # Проверка PHP-FPM
-sudo systemctl status php8.1-fpm
+sudo systemctl status php8.3-fpm
 # или для других версий PHP
 sudo systemctl status php-fpm
 
@@ -39,9 +39,9 @@ sudo systemctl status nginx
 
 #### Если PHP-FPM не запущен:
 ```bash
-# Для PHP 8.1
-sudo systemctl start php8.1-fpm
-sudo systemctl enable php8.1-fpm
+# Для PHP 8.3
+sudo systemctl start php8.3-fpm
+sudo systemctl enable php8.3-fpm
 
 # Для других версий
 sudo systemctl start php-fpm
@@ -68,9 +68,9 @@ sudo tail -50 /var/log/nginx/error.log
 sudo tail -50 /var/log/nginx/iiko-base-error.log
 
 # Логи PHP-FPM
-sudo tail -50 /var/log/php8.1-fpm.log
+sudo tail -50 /var/log/php8.3-fpm.log
 # или
-sudo journalctl -u php8.1-fpm -n 50
+sudo journalctl -u php8.3-fpm -n 50
 
 # Логи Python backend
 sudo journalctl -u iiko-backend -n 50
@@ -90,13 +90,13 @@ sudo nano /etc/nginx/sites-available/iiko-base
 
 ```bash
 # Проверка существования сокета
-ls -la /var/run/php/php8.1-fpm.sock
+ls -la /var/run/php/php8.3-fpm.sock
 
 # Если сокет не существует, проверьте конфигурацию PHP-FPM
-sudo nano /etc/php/8.1/fpm/pool.d/www.conf
+sudo nano /etc/php/8.3/fpm/pool.d/www.conf
 
 # Найдите строку с listen и убедитесь что она указывает на сокет
-# listen = /var/run/php/php8.1-fpm.sock
+# listen = /var/run/php/php8.3-fpm.sock
 ```
 
 ### Шаг 6: Перезапуск всех сервисов
@@ -112,7 +112,7 @@ sudo ./scripts/deploy.sh
 Или вручную:
 
 ```bash
-sudo systemctl restart php8.1-fpm
+sudo systemctl restart php8.3-fpm
 sudo systemctl restart iiko-backend
 sudo systemctl restart nginx
 ```
@@ -122,8 +122,8 @@ sudo systemctl restart nginx
 В 90% случаев проблема решается простым запуском PHP-FPM:
 
 ```bash
-sudo systemctl start php8.1-fpm
-sudo systemctl enable php8.1-fpm
+sudo systemctl start php8.3-fpm
+sudo systemctl enable php8.3-fpm
 sudo systemctl restart nginx
 ```
 
@@ -135,7 +135,7 @@ sudo systemctl restart nginx
 # Проверка PHP-FPM через сокет
 sudo -u www-data SCRIPT_FILENAME=/var/www/iiko-base/frontend/public/index.php \
      REQUEST_METHOD=GET \
-     cgi-fcgi -bind -connect /var/run/php/php8.1-fpm.sock
+     cgi-fcgi -bind -connect /var/run/php/php8.3-fpm.sock
 
 # Проверка Python backend
 curl http://localhost:8000/health
@@ -202,14 +202,14 @@ location ~ \.php$ {
 
 ## ⚠️ Частые ошибки
 
-### Ошибка: "connect() to unix:/var/run/php/php8.1-fpm.sock failed"
+### Ошибка: "connect() to unix:/var/run/php/php8.3-fpm.sock failed"
 
 **Причина**: PHP-FPM не запущен или сокет не существует
 
 **Решение**:
 ```bash
-sudo systemctl start php8.1-fpm
-sudo systemctl enable php8.1-fpm
+sudo systemctl start php8.3-fpm
+sudo systemctl enable php8.3-fpm
 ```
 
 ### Ошибка: "upstream timed out"
@@ -225,7 +225,7 @@ sudo systemctl enable php8.1-fpm
 **Решение**:
 ```bash
 # Проверьте права доступа к сокету
-ls -la /var/run/php/php8.1-fpm.sock
+ls -la /var/run/php/php8.3-fpm.sock
 
 # Убедитесь, что Nginx запущен от пользователя www-data
 ps aux | grep nginx

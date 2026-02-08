@@ -176,15 +176,15 @@ systemctl restart iiko-backend
 
 # Запуск PHP-FPM (требуется для Laravel frontend)
 print_info "Запуск PHP-FPM..."
-systemctl enable php8.1-fpm || systemctl enable php-fpm || print_warning "PHP-FPM service не найден"
-systemctl restart php8.1-fpm || systemctl restart php-fpm || print_warning "Не удалось перезапустить PHP-FPM"
+systemctl enable php8.3-fpm || systemctl enable php-fpm || print_warning "PHP-FPM service не найден"
+systemctl restart php8.3-fpm || systemctl restart php-fpm || print_warning "Не удалось перезапустить PHP-FPM"
 
 systemctl restart nginx
 
 # Проверка статуса
 print_info "Проверка статуса сервисов..."
 systemctl status iiko-backend --no-pager || true
-if ! systemctl status php8.1-fpm --no-pager 2>/dev/null && ! systemctl status php-fpm --no-pager 2>/dev/null; then
+if ! systemctl status php8.3-fpm --no-pager 2>/dev/null && ! systemctl status php-fpm --no-pager 2>/dev/null; then
     print_warning "PHP-FPM не запущен"
 fi
 systemctl status nginx --no-pager || true
