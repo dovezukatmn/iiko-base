@@ -289,6 +289,16 @@ psql -h localhost -U iiko_user -d iiko_db
    chmod -R 775 frontend/bootstrap/cache
    ```
 
+### Админ-панель возвращает 500 Server Error
+
+**Быстрое решение:**
+1. Перейдите в `frontend` и сгенерируйте ключ: `php artisan key:generate --force`
+2. Очистите кэши: `php artisan optimize:clear && php artisan config:cache`
+3. Проверьте права: `sudo chown -R www-data:www-data storage bootstrap/cache && sudo chmod -R 775 storage bootstrap/cache`
+4. Перезапустите PHP-FPM: `sudo systemctl restart php8.3-fpm` (или `php-fpm`)
+
+Подробная инструкция: [docs/500_ADMIN_PANEL_ERROR.md](500_ADMIN_PANEL_ERROR.md)
+
 ### SSL сертификат не работает
 
 **Проблема:** ERR_SSL_PROTOCOL_ERROR в браузере
