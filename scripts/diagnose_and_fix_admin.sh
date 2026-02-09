@@ -1,0 +1,347 @@
+#!/bin/bash
+# Comprehensive Admin Login Diagnostic and Fix Script
+# Проверяет и исправляет все возможные проблемы с входом в админку
+#
+# SECURITY NOTE:
+# This script uses default credentials for convenience in development/testing.
+# For production use, always set secure passwords via environment variables:
+#   export DB_PASSWORD="your_secure_db_password"
+#   export ADMIN_PASSWORD="your_secure_admin_password"
+#   ./diagnose_and_fix_admin.sh
+#
+# The script uses psql parameterized queries to prevent SQL injection.
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Configuration - можно переопределить через переменные окружения
+DB_HOST="${DB_HOST:-localhost}"
+DB_PORT="${DB_PORT:-5432}"
+DB_NAME="${DB_NAME:-iiko_db}"
+DB_USER="${DB_USER:-iiko_user}"
+DB_PASSWORD="${DB_PASSWORD:-12101991Qq!}"
+ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-12101991Qq!}"
+ADMIN_EMAIL="${ADMIN_EMAIL:-admin@example.com}"
+
+# Correct hash for password "12101991Qq!"
+EXPECTED_HASH='$2b$12$y4QVNPhuZfpLp1.xM6.NSeDnpD6I/wm.dSOXGrxV.HtXj6izHJLPa'
+
+# Security warning if using default passwords
+if [ "$DB_PASSWORD" = "12101991Qq!" ] || [ "$ADMIN_PASSWORD" = "12101991Qq!" ]; then
+    echo -e "${RED}⚠️  WARNING: Using default passwords!${NC}"
+    echo -e "${RED}   For production, set secure passwords via environment variables:${NC}"
+    echo -e "${RED}   export DB_PASSWORD='your_secure_password'${NC}"
+    echo -e "${RED}   export ADMIN_PASSWORD='your_secure_password'${NC}"
+    echo ""
+fi
+
+echo -e "${BLUE}========================================${NC}"
+echo -e "${BLUE}Admin Login Comprehensive Diagnostics${NC}"
+echo -e "${BLUE}========================================${NC}"
+echo ""
+
+# Error counter
+ERRORS=0
+FIXES_APPLIED=0
+
+# Test 1: Check PostgreSQL is running
+echo -e "${YELLOW}[1/10] Checking PostgreSQL service...${NC}"
+if systemctl is-active --quiet postgresql 2>/dev/null || pgrep -x postgres > /dev/null; then
+    echo -e "${GREEN}✓ PostgreSQL is running${NC}"
+else
+    echo -e "${RED}✗ PostgreSQL is NOT running${NC}"
+    echo "  Fix: sudo systemctl start postgresql"
+    ((ERRORS++))
+fi
+echo ""
+
+# Test 2: Check database connection
+echo -e "${YELLOW}[2/10] Testing database connection...${NC}"
+if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1" > /dev/null 2>&1; then
+    echo -e "${GREEN}✓ Database connection successful${NC}"
+else
+    echo -e "${RED}✗ Cannot connect to database${NC}"
+    echo "  Database: $DB_NAME"
+    echo "  User: $DB_USER"
+    echo "  Host: $DB_HOST"
+    echo "  Fix: Check database credentials and PostgreSQL access"
+    ((ERRORS++))
+    exit 1
+fi
+echo ""
+
+# Test 3: Check users table exists
+echo -e "${YELLOW}[3/10] Checking users table...${NC}"
+TABLE_EXISTS=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -tAc \
+    "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'users');")
+if [ "$TABLE_EXISTS" = "t" ]; then
+    echo -e "${GREEN}✓ Users table exists${NC}"
+else
+    echo -e "${RED}✗ Users table does NOT exist${NC}"
+    echo "  Fix: Run database migration: ./scripts/setup.sh"
+    ((ERRORS++))
+    exit 1
+fi
+echo ""
+
+# Test 4: Check role column exists (CRITICAL)
+echo -e "${YELLOW}[4/10] Checking for role column...${NC}"
+ROLE_COLUMN_EXISTS=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -tAc \
+    "SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'role');")
+if [ "$ROLE_COLUMN_EXISTS" = "t" ]; then
+    echo -e "${GREEN}✓ Role column exists${NC}"
+else
+    echo -e "${RED}✗ Role column is MISSING (critical bug)${NC}"
+    echo "  This is a common cause of login failures!"
+    echo "  Attempting to fix..."
+    
+    # Add role column
+    PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" <<EOF
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'viewer';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_superuser BOOLEAN DEFAULT FALSE;
+EOF
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ Role column added successfully${NC}"
+        ((FIXES_APPLIED++))
+    else
+        echo -e "${RED}✗ Failed to add role column${NC}"
+        ((ERRORS++))
+    fi
+fi
+echo ""
+
+# Test 5: Check if admin user exists
+echo -e "${YELLOW}[5/10] Checking admin user...${NC}"
+ADMIN_EXISTS=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -tAc \
+    -v username="$ADMIN_USERNAME" "SELECT EXISTS (SELECT 1 FROM users WHERE username = :'username');")
+if [ "$ADMIN_EXISTS" = "t" ]; then
+    echo -e "${GREEN}✓ Admin user exists${NC}"
+    
+    # Get admin details
+    ADMIN_INFO=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -tAc \
+        -v username="$ADMIN_USERNAME" "SELECT id, username, email, role, is_active, is_superuser FROM users WHERE username = :'username';")
+    echo "  Details: $ADMIN_INFO"
+else
+    echo -e "${RED}✗ Admin user does NOT exist${NC}"
+    echo "  Creating admin user..."
+    
+    # Create admin user with parameterized query
+    PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" \
+        -v username="$ADMIN_USERNAME" \
+        -v email="$ADMIN_EMAIL" \
+        -v hash="$EXPECTED_HASH" <<EOF
+INSERT INTO users (username, email, hashed_password, role, is_active, is_superuser, created_at)
+VALUES (:'username', :'email', :'hash', 'admin', TRUE, TRUE, NOW())
+ON CONFLICT (username) DO NOTHING;
+EOF
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ Admin user created${NC}"
+        ((FIXES_APPLIED++))
+    else
+        echo -e "${RED}✗ Failed to create admin user${NC}"
+        ((ERRORS++))
+    fi
+fi
+echo ""
+
+# Test 6: Verify admin is active
+echo -e "${YELLOW}[6/10] Checking admin is active...${NC}"
+if [ "$ADMIN_EXISTS" = "t" ]; then
+    IS_ACTIVE=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -tAc \
+        -v username="$ADMIN_USERNAME" "SELECT is_active FROM users WHERE username = :'username';")
+    if [ "$IS_ACTIVE" = "t" ]; then
+        echo -e "${GREEN}✓ Admin user is active${NC}"
+    else
+        echo -e "${RED}✗ Admin user is INACTIVE${NC}"
+        echo "  Activating admin user..."
+        
+        PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" \
+            -v username="$ADMIN_USERNAME" <<EOF
+UPDATE users SET is_active = TRUE WHERE username = :'username';
+EOF
+        
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ Admin user activated${NC}"
+            ((FIXES_APPLIED++))
+        else
+            echo -e "${RED}✗ Failed to activate admin user${NC}"
+            ((ERRORS++))
+        fi
+    fi
+fi
+echo ""
+
+# Test 7: Check password hash
+echo -e "${YELLOW}[7/10] Verifying password hash...${NC}"
+if [ "$ADMIN_EXISTS" = "t" ]; then
+    CURRENT_HASH=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -tAc \
+        -v username="$ADMIN_USERNAME" "SELECT hashed_password FROM users WHERE username = :'username';")
+    
+    # Remove whitespace
+    CURRENT_HASH=$(echo "$CURRENT_HASH" | tr -d '[:space:]')
+    EXPECTED_HASH_CLEAN=$(echo "$EXPECTED_HASH" | tr -d '[:space:]')
+    
+    if [ "$CURRENT_HASH" = "$EXPECTED_HASH_CLEAN" ]; then
+        echo -e "${GREEN}✓ Password hash is correct${NC}"
+    elif [[ "$CURRENT_HASH" == *"\\$"* ]]; then
+        echo -e "${RED}✗ Password hash has escaped characters (common bug)${NC}"
+        echo "  Current: ${CURRENT_HASH:0:30}..."
+        echo "  Expected: ${EXPECTED_HASH:0:30}..."
+        echo "  Fixing hash..."
+        
+        PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" \
+            -v hash="$EXPECTED_HASH" \
+            -v username="$ADMIN_USERNAME" <<EOF
+UPDATE users SET hashed_password = :'hash' WHERE username = :'username';
+EOF
+        
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ Password hash corrected${NC}"
+            ((FIXES_APPLIED++))
+        else
+            echo -e "${RED}✗ Failed to fix password hash${NC}"
+            ((ERRORS++))
+        fi
+    else
+        echo -e "${YELLOW}⚠ Password hash differs from expected${NC}"
+        echo "  Current: ${CURRENT_HASH:0:30}..."
+        echo "  Expected: ${EXPECTED_HASH:0:30}..."
+        echo "  Resetting to default password..."
+        
+        PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" \
+            -v hash="$EXPECTED_HASH" \
+            -v username="$ADMIN_USERNAME" <<EOF
+UPDATE users SET hashed_password = :'hash' WHERE username = :'username';
+EOF
+        
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ Password reset to default${NC}"
+            ((FIXES_APPLIED++))
+        else
+            echo -e "${RED}✗ Failed to reset password${NC}"
+            ((ERRORS++))
+        fi
+    fi
+fi
+echo ""
+
+# Test 8: Check backend service
+echo -e "${YELLOW}[8/10] Checking backend service...${NC}"
+if systemctl is-active --quiet iiko-backend 2>/dev/null; then
+    echo -e "${GREEN}✓ Backend service is running (systemd)${NC}"
+elif docker ps | grep -q iiko.*backend 2>/dev/null; then
+    echo -e "${GREEN}✓ Backend service is running (Docker)${NC}"
+elif pgrep -f "uvicorn.*app.main" > /dev/null; then
+    echo -e "${GREEN}✓ Backend service is running (direct)${NC}"
+else
+    echo -e "${YELLOW}⚠ Backend service status unknown${NC}"
+    echo "  Check: sudo systemctl status iiko-backend"
+    echo "  Or: docker-compose ps"
+fi
+echo ""
+
+# Test 9: Test API endpoint
+echo -e "${YELLOW}[9/10] Testing API endpoint...${NC}"
+if command -v curl > /dev/null 2>&1; then
+    API_RESPONSE=$(curl -s -X POST http://localhost:8000/api/v1/auth/login \
+        -H "Content-Type: application/json" \
+        -d "{\"username\":\"$ADMIN_USERNAME\",\"password\":\"$ADMIN_PASSWORD\"}" 2>&1)
+    
+    if echo "$API_RESPONSE" | grep -q "access_token"; then
+        echo -e "${GREEN}✓ API login successful!${NC}"
+        echo "  Token received - backend is working correctly"
+    elif echo "$API_RESPONSE" | grep -q "Connection refused"; then
+        echo -e "${RED}✗ Backend is not reachable on port 8000${NC}"
+        echo "  Fix: Start backend service"
+        ((ERRORS++))
+    elif echo "$API_RESPONSE" | grep -q "401\|Неверные учетные данные"; then
+        echo -e "${RED}✗ API returns 401 - authentication failed${NC}"
+        echo "  Response: $API_RESPONSE"
+        echo "  The database might be correct but backend has issues"
+        ((ERRORS++))
+    else
+        echo -e "${YELLOW}⚠ Unexpected API response${NC}"
+        echo "  Response: $API_RESPONSE"
+    fi
+else
+    echo -e "${YELLOW}⚠ curl not installed, skipping API test${NC}"
+fi
+echo ""
+
+# Test 10: Check environment files
+echo -e "${YELLOW}[10/10] Checking environment configuration...${NC}"
+ISSUES=""
+
+if [ -f "backend/.env" ]; then
+    if grep -q "DATABASE_URL.*$DB_NAME" backend/.env; then
+        echo -e "${GREEN}✓ Backend .env exists and configured${NC}"
+    else
+        echo -e "${YELLOW}⚠ Backend .env exists but may have wrong DATABASE_URL${NC}"
+        ISSUES="${ISSUES}\n  - Check DATABASE_URL in backend/.env"
+    fi
+else
+    echo -e "${YELLOW}⚠ Backend .env not found${NC}"
+    ISSUES="${ISSUES}\n  - Create backend/.env from backend/.env.example"
+fi
+
+if [ -f "frontend/.env" ]; then
+    if grep -q "BACKEND_API_URL\|VITE_API_URL" frontend/.env; then
+        echo -e "${GREEN}✓ Frontend .env exists and configured${NC}"
+    else
+        echo -e "${YELLOW}⚠ Frontend .env missing API URL configuration${NC}"
+        ISSUES="${ISSUES}\n  - Add BACKEND_API_URL or VITE_API_URL to frontend/.env"
+    fi
+else
+    echo -e "${YELLOW}⚠ Frontend .env not found${NC}"
+    ISSUES="${ISSUES}\n  - Create frontend/.env from frontend/.env.example"
+fi
+
+if [ -n "$ISSUES" ]; then
+    echo -e "${YELLOW}Configuration issues found:${NC}"
+    echo -e "$ISSUES"
+fi
+echo ""
+
+# Summary
+echo -e "${BLUE}========================================${NC}"
+echo -e "${BLUE}DIAGNOSTIC SUMMARY${NC}"
+echo -e "${BLUE}========================================${NC}"
+echo ""
+
+if [ $ERRORS -eq 0 ]; then
+    echo -e "${GREEN}✓ All checks passed!${NC}"
+    echo ""
+    echo -e "${GREEN}You should be able to login with:${NC}"
+    echo -e "  Username: ${YELLOW}$ADMIN_USERNAME${NC}"
+    echo -e "  Password: ${YELLOW}$ADMIN_PASSWORD${NC}"
+    echo ""
+    echo -e "${RED}⚠️  IMPORTANT: Change this password immediately after login!${NC}"
+else
+    echo -e "${RED}✗ Found $ERRORS error(s)${NC}"
+    echo ""
+    echo "Please fix the errors above before attempting login."
+fi
+
+if [ $FIXES_APPLIED -gt 0 ]; then
+    echo ""
+    echo -e "${GREEN}Applied $FIXES_APPLIED fix(es) automatically${NC}"
+    echo ""
+    echo "Restart the backend service for changes to take effect:"
+    echo "  sudo systemctl restart iiko-backend"
+    echo "  OR: docker-compose restart backend"
+fi
+
+echo ""
+echo -e "${BLUE}========================================${NC}"
+
+exit $ERRORS
