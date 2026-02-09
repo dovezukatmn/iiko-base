@@ -93,11 +93,17 @@ class IikoService:
         result = await self._request("POST", "/access_token", json_data={"apiLogin": key}, _is_auth=True)
         # iiko API may return token as plain text string or as JSON {"token": "..."}
         if isinstance(result, str):
-            self._token = result.strip().strip('"')
+            # Plain text response; strip whitespace and surrounding quotes
+            # (iiko may return a bare JSON string like "token-value")
+            token_str = result.strip()
+            if len(token_str) >= 2 and token_str[0] == '"' and token_str[-1] == '"':
+                token_str = token_str[1:-1]
+            self._token = token_str
         elif isinstance(result, dict):
+            # JSON response: try "token" (documented) or "access_token" (compatibility)
             self._token = result.get("token") or result.get("access_token") or ""
         else:
-            self._token = str(result).strip().strip('"')
+            self._token = str(result).strip()
         # Обновить время последнего обновления токена в БД
         if self.iiko_settings:
             self.iiko_settings.last_token_refresh = sa_func.now()
