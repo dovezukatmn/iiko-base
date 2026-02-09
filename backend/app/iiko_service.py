@@ -167,7 +167,7 @@ class IikoService:
             json_data={"organizationIds": organization_ids},
         )
 
-    async def register_webhook(self, webhook_url: str, auth_token: str) -> dict:
+    async def register_webhook(self, organization_id: str, webhook_url: str, auth_token: str) -> dict:
         """Зарегистрировать вебхук в iiko"""
         if not self._token:
             await self.authenticate()
@@ -175,6 +175,7 @@ class IikoService:
             "POST",
             "/webhooks/update_settings",
             json_data={
+                "organizationId": organization_id,
                 "webHooksUri": webhook_url,
                 "authToken": auth_token,
             },

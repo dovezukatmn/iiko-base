@@ -609,7 +609,7 @@ async def get_iiko_discount_types(
 @api_router.post("/iiko/register-webhook", tags=["iiko"])
 async def register_iiko_webhook(
     setting_id: int,
-    webhook_url: str,
+    webhook_url: str = None,
     db: Session = Depends(get_db),
     _current_user: User = Depends(require_role("admin")),
 ):
@@ -618,10 +618,19 @@ async def register_iiko_webhook(
     if not rec:
         raise HTTPException(status_code=404, detail="Настройка не найдена")
 
+    if not rec.organization_id:
+        raise HTTPException(status_code=400, detail="organization_id не задан в настройках iiko")
+
+    # Автоматически генерировать URL вебхука, если не указан
+    if not webhook_url:
+        if not settings.WEBHOOK_BASE_URL:
+            raise HTTPException(status_code=400, detail="Не указан webhook_url и не задан WEBHOOK_BASE_URL")
+        webhook_url = f"{settings.WEBHOOK_BASE_URL.rstrip('/')}{settings.API_V1_PREFIX}/webhooks/iiko"
+
     auth_token = secrets.token_urlsafe(32)
     svc = IikoService(db, rec)
     try:
-        result = await svc.register_webhook(webhook_url, auth_token)
+        result = await svc.register_webhook(rec.organization_id, webhook_url, auth_token)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Ошибка регистрации вебхука: {str(e)}")
 
