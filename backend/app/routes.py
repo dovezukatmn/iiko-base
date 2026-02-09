@@ -58,25 +58,52 @@ async def login(form: UserLogin, db: Session = Depends(get_db)):
     """Авторизация пользователя (получение JWT)"""
     user = db.query(User).filter(User.username == form.username).first()
     
-    # Bootstrap: Create default admin user if it doesn't exist and credentials match
+    # Bootstrap: Create default admin user only on first-time setup
+    # (no admin-role users exist yet and credentials match defaults)
     if not user and form.username == settings.DEFAULT_ADMIN_USERNAME:
-        default_password = str(settings.DEFAULT_ADMIN_PASSWORD)
-        if secrets.compare_digest(form.password, default_password):
-            # Create admin user only if no user with this username exists
-            # (This is a bootstrap for first-time setup)
-            user = User(
-                email=settings.DEFAULT_ADMIN_EMAIL,
-                username=settings.DEFAULT_ADMIN_USERNAME,
-                hashed_password=get_password_hash(default_password),
-                role="admin",
-                is_active=True,
-                is_superuser=True,
-            )
-            db.add(user)
-            db.commit()
-            db.refresh(user)
+        has_any_admin = db.query(User).filter(User.role == "admin").first() is not None
+        if not has_any_admin:
+            default_password = str(settings.DEFAULT_ADMIN_PASSWORD)
+            if secrets.compare_digest(form.password, default_password):
+                try:
+                    user = User(
+                        email=settings.DEFAULT_ADMIN_EMAIL,
+                        username=settings.DEFAULT_ADMIN_USERNAME,
+                        hashed_password=get_password_hash(default_password),
+                        role="admin",
+                        is_active=True,
+                        is_superuser=True,
+                    )
+                    db.add(user)
+                    db.commit()
+                    db.refresh(user)
+                except Exception:
+                    db.rollback()
+                    user = None
 
-    if not user or not verify_password(form.password, user.hashed_password):
+    # If the default admin user exists but has a corrupted/invalid hash,
+    # repair it using the known default password.
+    if user is not None and form.username == settings.DEFAULT_ADMIN_USERNAME:
+        hash_corrupted = False
+        try:
+            verify_password(form.password, user.hashed_password)
+        except Exception:
+            hash_corrupted = True
+        if hash_corrupted:
+            default_password = str(settings.DEFAULT_ADMIN_PASSWORD)
+            if secrets.compare_digest(form.password, default_password):
+                user.hashed_password = get_password_hash(default_password)
+                try:
+                    db.commit()
+                    db.refresh(user)
+                except Exception:
+                    db.rollback()
+
+    try:
+        password_valid = verify_password(form.password, user.hashed_password) if user else False
+    except Exception:
+        password_valid = False
+    if not user or not password_valid:
         raise HTTPException(status_code=401, detail="Неверные учетные данные")
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Пользователь деактивирован")
