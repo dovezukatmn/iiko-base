@@ -121,14 +121,14 @@ echo ""
 
 # Test 5: Check if admin user exists
 echo -e "${YELLOW}[5/10] Checking admin user...${NC}"
-ADMIN_EXISTS=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -tAc \
-    -v username="$ADMIN_USERNAME" "SELECT EXISTS (SELECT 1 FROM users WHERE username = :'username');")
+ADMIN_EXISTS=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -v username="$ADMIN_USERNAME" -tAc \
+    "SELECT EXISTS (SELECT 1 FROM users WHERE username = :'username');")
 if [ "$ADMIN_EXISTS" = "t" ]; then
     echo -e "${GREEN}✓ Admin user exists${NC}"
     
     # Get admin details
-    ADMIN_INFO=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -tAc \
-        -v username="$ADMIN_USERNAME" "SELECT id, username, email, role, is_active, is_superuser FROM users WHERE username = :'username';")
+    ADMIN_INFO=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -v username="$ADMIN_USERNAME" -tAc \
+        "SELECT id, username, email, role, is_active, is_superuser FROM users WHERE username = :'username';")
     echo "  Details: $ADMIN_INFO"
 else
     echo -e "${RED}✗ Admin user does NOT exist${NC}"
@@ -157,8 +157,8 @@ echo ""
 # Test 6: Verify admin is active
 echo -e "${YELLOW}[6/10] Checking admin is active...${NC}"
 if [ "$ADMIN_EXISTS" = "t" ]; then
-    IS_ACTIVE=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -tAc \
-        -v username="$ADMIN_USERNAME" "SELECT is_active FROM users WHERE username = :'username';")
+    IS_ACTIVE=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -v username="$ADMIN_USERNAME" -tAc \
+        "SELECT is_active FROM users WHERE username = :'username';")
     if [ "$IS_ACTIVE" = "t" ]; then
         echo -e "${GREEN}✓ Admin user is active${NC}"
     else
@@ -184,8 +184,8 @@ echo ""
 # Test 7: Check password hash
 echo -e "${YELLOW}[7/10] Verifying password hash...${NC}"
 if [ "$ADMIN_EXISTS" = "t" ]; then
-    CURRENT_HASH=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -tAc \
-        -v username="$ADMIN_USERNAME" "SELECT hashed_password FROM users WHERE username = :'username';")
+    CURRENT_HASH=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -v username="$ADMIN_USERNAME" -tAc \
+        "SELECT hashed_password FROM users WHERE username = :'username';")
     
     # Remove whitespace
     CURRENT_HASH=$(echo "$CURRENT_HASH" | tr -d '[:space:]')
