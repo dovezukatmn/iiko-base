@@ -88,7 +88,8 @@ def test_login_creates_default_admin_and_returns_token():
         app.dependency_overrides.pop(get_db, None)
 
 
-def test_login_denies_default_credentials_when_admin_exists():
+def test_login_denies_bootstrap_when_admin_exists():
+    """Bootstrap should be disabled when any admin-role user exists."""
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     app.dependency_overrides[get_db] = override_get_db
@@ -117,5 +118,59 @@ def test_login_denies_default_credentials_when_admin_exists():
             },
         )
         assert response.status_code == 401
+
+        # Verify the default admin was NOT created
+        db2 = TestingSessionLocal()
+        try:
+            admin = db2.query(User).filter(User.username == settings.DEFAULT_ADMIN_USERNAME).first()
+            assert admin is None
+        finally:
+            db2.close()
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+def test_login_repairs_corrupted_admin_hash():
+    """Login should repair a corrupted password hash for the default admin."""
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    app.dependency_overrides[get_db] = override_get_db
+
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            User(
+                email=settings.DEFAULT_ADMIN_EMAIL,
+                username=settings.DEFAULT_ADMIN_USERNAME,
+                hashed_password="corrupted-hash-value",
+                role="admin",
+                is_active=True,
+                is_superuser=True,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    client = TestClient(app)
+    try:
+        response = client.post(
+            f"{settings.API_V1_PREFIX}/auth/login",
+            json={
+                "username": settings.DEFAULT_ADMIN_USERNAME,
+                "password": DEFAULT_PASSWORD,
+            },
+        )
+        assert response.status_code == 200
+        assert response.json().get("access_token")
+
+        # Verify the hash was repaired
+        db2 = TestingSessionLocal()
+        try:
+            user = db2.query(User).filter(User.username == settings.DEFAULT_ADMIN_USERNAME).first()
+            assert user is not None
+            assert verify_password(DEFAULT_PASSWORD, user.hashed_password)
+        finally:
+            db2.close()
     finally:
         app.dependency_overrides.pop(get_db, None)
