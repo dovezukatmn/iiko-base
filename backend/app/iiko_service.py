@@ -49,6 +49,7 @@ class IikoService:
         json_data: Optional[dict] = None,
         headers: Optional[dict] = None,
         _retried: bool = False,
+        _is_auth: bool = False,
     ) -> dict:
         url = f"{self.base_url}/{path.lstrip('/')}"
         req_body = json.dumps(json_data) if json_data else None
@@ -58,7 +59,7 @@ class IikoService:
         }
         if headers:
             hdrs.update(headers)
-        if self._token:
+        if self._token and not _is_auth:
             hdrs["Authorization"] = f"Bearer {self._token}"
 
         start = time.time()
@@ -69,8 +70,8 @@ class IikoService:
         resp_text = response.text
         self._log_request(method, url, req_body, response.status_code, resp_text, duration)
 
-        # Auto-retry once on 401 (expired token)
-        if response.status_code == 401 and not _retried:
+        # Auto-retry once on 401 (expired token), but NOT for auth requests
+        if response.status_code == 401 and not _retried and not _is_auth:
             await self.authenticate()
             return await self._request(method, path, json_data, headers, _retried=True)
 
@@ -82,7 +83,7 @@ class IikoService:
     async def authenticate(self, api_key: Optional[str] = None) -> str:
         """Получить токен доступа iiko (токен живет ~15 минут)"""
         key = api_key or (self.iiko_settings.api_key if self.iiko_settings else settings.IIKO_API_KEY)
-        result = await self._request("POST", "/access_token", json_data={"apiLogin": key})
+        result = await self._request("POST", "/access_token", json_data={"apiLogin": key}, _is_auth=True)
         self._token = result.get("token", "")
         # Обновить время последнего обновления токена в БД
         if self.iiko_settings:
@@ -160,7 +161,7 @@ class IikoService:
         return await self._request(
             "POST",
             "/employees/couriers",
-            json_data={"organizationId": organization_id},
+            json_data={"organizationIds": [organization_id]},
         )
 
     async def get_order_types(self, organization_ids: list) -> dict:
@@ -194,5 +195,63 @@ class IikoService:
                 "organizationId": organization_id,
                 "webHooksUri": webhook_url,
                 "authToken": auth_token,
+                "webHooksFilter": {
+                    "deliveryOrderFilter": {
+                        "orderStatuses": [
+                            "Unconfirmed", "WaitCooking", "ReadyForCooking",
+                            "CookingStarted", "CookingCompleted", "Waiting",
+                            "OnWay", "Delivered", "Closed", "Cancelled"
+                        ],
+                        "itemStatuses": [
+                            "Added", "PrintedNotCooking", "CookingStarted",
+                            "CookingCompleted", "Served"
+                        ],
+                        "errors": True,
+                    },
+                    "tableOrderFilter": {
+                        "orderStatuses": ["New"],
+                        "itemStatuses": ["Added"],
+                        "errors": True,
+                    },
+                    "reserveFilter": {
+                        "updates": True,
+                        "errors": True,
+                    },
+                    "stopListUpdateFilter": {
+                        "updates": True,
+                    },
+                    "personalShiftFilter": {
+                        "updates": True,
+                    },
+                },
+            },
+        )
+
+    async def get_webhook_settings(self, organization_id: str) -> dict:
+        """Получить текущие настройки вебхука"""
+        if not self._token:
+            await self.authenticate()
+        return await self._request(
+            "POST",
+            "/webhooks/settings",
+            json_data={"organizationId": organization_id},
+        )
+
+    async def get_deliveries_by_statuses(self, organization_id: str, statuses: list) -> dict:
+        """Получить заказы по статусам"""
+        if not self._token:
+            await self.authenticate()
+        from datetime import datetime, timedelta
+        now = datetime.utcnow()
+        date_from = (now - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S.000")
+        date_to = now.strftime("%Y-%m-%d %H:%M:%S.000")
+        return await self._request(
+            "POST",
+            "/deliveries/by_delivery_date_and_status",
+            json_data={
+                "organizationIds": [organization_id],
+                "deliveryDateFrom": date_from,
+                "deliveryDateTo": date_to,
+                "statuses": statuses,
             },
         )

@@ -265,9 +265,15 @@ async def test_iiko_connection(
     try:
         svc = IikoService(db, rec)
         token = await svc.authenticate()
-        return {"status": "ok", "message": "Подключение успешно"}
+        return {"status": "ok", "message": "Подключение успешно! Токен получен."}
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Ошибка подключения: {str(e)}")
+        error_msg = str(e)
+        if "401" in error_msg:
+            raise HTTPException(
+                status_code=502,
+                detail="Неверный API ключ (apiLogin). Проверьте правильность ключа в настройках iiko Cloud."
+            )
+        raise HTTPException(status_code=502, detail=f"Ошибка подключения к iiko API: {error_msg}")
 
 
 # ─── iiko Data ───────────────────────────────────────────────────────────
@@ -685,3 +691,41 @@ async def get_iiko_stop_lists(
         raise HTTPException(status_code=404, detail="Настройка не найдена")
     svc = IikoService(db, rec)
     return await svc.get_stop_lists(organization_id)
+
+
+@api_router.post("/iiko/webhook-settings", tags=["iiko"])
+async def get_iiko_webhook_settings(
+    setting_id: int,
+    organization_id: str,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("admin")),
+):
+    """Получить текущие настройки вебхука из iiko"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+    svc = IikoService(db, rec)
+    try:
+        return await svc.get_webhook_settings(organization_id)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Ошибка получения настроек вебхука: {str(e)}")
+
+
+@api_router.post("/iiko/deliveries", tags=["iiko"])
+async def get_iiko_deliveries(
+    setting_id: int,
+    organization_id: str,
+    statuses: str = "Unconfirmed,WaitCooking,ReadyForCooking,CookingStarted,CookingCompleted,Waiting,OnWay,Delivered,Closed,Cancelled",
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Получить заказы доставки из iiko по статусам"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+    svc = IikoService(db, rec)
+    status_list = [s.strip() for s in statuses.split(",") if s.strip()]
+    try:
+        return await svc.get_deliveries_by_statuses(organization_id, status_list)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Ошибка получения заказов: {str(e)}")

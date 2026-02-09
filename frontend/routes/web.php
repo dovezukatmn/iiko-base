@@ -20,6 +20,9 @@ Route::post('/login', [AdminController::class, 'login'])->name('login.submit');
 Route::middleware('admin.session')->group(function () {
     Route::get('/admin', [AdminController::class, 'dashboard'])->name('admin.dashboard');
     Route::get('/admin/maintenance', [AdminController::class, 'maintenance'])->name('admin.maintenance');
+    Route::get('/admin/menu', [AdminController::class, 'menuPage'])->name('admin.menu');
+    Route::get('/admin/orders', [AdminController::class, 'ordersPage'])->name('admin.orders');
+    Route::get('/admin/users', [AdminController::class, 'usersPage'])->name('admin.users');
 
     // AJAX API proxy routes for maintenance page
     Route::get('/admin/api/status', [AdminController::class, 'apiStatus'])->name('admin.api.status');
@@ -35,8 +38,18 @@ Route::middleware('admin.session')->group(function () {
     Route::post('/admin/api/iiko-discount-types', [AdminController::class, 'apiDiscountTypes'])->name('admin.api.iiko_discount_types');
     Route::post('/admin/api/iiko-stop-lists', [AdminController::class, 'apiStopLists'])->name('admin.api.iiko_stop_lists');
     Route::post('/admin/api/iiko-register-webhook', [AdminController::class, 'apiRegisterWebhook'])->name('admin.api.iiko_register_webhook');
+    Route::post('/admin/api/iiko-webhook-settings', [AdminController::class, 'apiWebhookSettings'])->name('admin.api.iiko_webhook_settings');
     Route::get('/admin/api/webhook-events', [AdminController::class, 'apiWebhookEvents'])->name('admin.api.webhook_events');
     Route::get('/admin/api/logs', [AdminController::class, 'apiLogs'])->name('admin.api.logs');
+
+    // Menu, Orders, Users API proxy routes
+    Route::get('/admin/api/menu', [AdminController::class, 'apiMenu'])->name('admin.api.menu');
+    Route::post('/admin/api/iiko-menu', [AdminController::class, 'apiIikoMenu'])->name('admin.api.iiko_menu');
+    Route::post('/admin/api/iiko-sync-menu', [AdminController::class, 'apiSyncMenu'])->name('admin.api.iiko_sync_menu');
+    Route::get('/admin/api/orders', [AdminController::class, 'apiOrders'])->name('admin.api.orders');
+    Route::post('/admin/api/iiko-deliveries', [AdminController::class, 'apiIikoDeliveries'])->name('admin.api.iiko_deliveries');
+    Route::get('/admin/api/users', [AdminController::class, 'apiUsers'])->name('admin.api.users');
+    Route::put('/admin/api/users/{userId}/role', [AdminController::class, 'apiUpdateUserRole'])->name('admin.api.users.update_role');
 
     Route::post('/logout', [AdminController::class, 'logout'])->name('logout');
 });

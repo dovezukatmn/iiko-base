@@ -34,18 +34,18 @@
             <span>🔧 Обслуживание и настройки</span>
             <span class="arrow">→</span>
         </a>
-        <span class="collapse-trigger" style="opacity:0.5;cursor:default;">
+        <a href="{{ route('admin.menu') }}" class="collapse-trigger" style="text-decoration:none;">
             <span>📋 Настройка меню iiko</span>
-            <span class="badge badge-muted">Скоро</span>
-        </span>
-        <span class="collapse-trigger" style="opacity:0.5;cursor:default;">
+            <span class="arrow">→</span>
+        </a>
+        <a href="{{ route('admin.orders') }}" class="collapse-trigger" style="text-decoration:none;">
             <span>🛒 Управление заказами</span>
-            <span class="badge badge-muted">Скоро</span>
-        </span>
-        <span class="collapse-trigger" style="opacity:0.5;cursor:default;">
+            <span class="arrow">→</span>
+        </a>
+        <a href="{{ route('admin.users') }}" class="collapse-trigger" style="text-decoration:none;">
             <span>👥 Управление пользователями</span>
-            <span class="badge badge-muted">Скоро</span>
-        </span>
+            <span class="arrow">→</span>
+        </a>
     </div>
 </div>
 @endsection

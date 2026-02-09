@@ -190,7 +190,7 @@
             <div class="settings-form">
                 <div class="form-group">
                     <label class="form-label">Настройка iiko</label>
-                    <select class="form-input" id="webhook-setting-select">
+                    <select class="form-input" id="webhook-setting-select" onchange="onWebhookSettingChange()">
                         <option value="">Загрузка...</option>
                     </select>
                 </div>
@@ -221,17 +221,32 @@
             </div>
         </div>
 
-        {{-- Webhook Events --}}
-        <div class="card">
-            <div class="card-header">
-                <div>
-                    <div class="card-title">Входящие события</div>
-                    <div class="card-subtitle">Последние вебхук-события от iiko</div>
+        <div>
+            {{-- Current Webhook Settings --}}
+            <div class="card" style="margin-bottom:16px;">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Текущие настройки вебхука</div>
+                        <div class="card-subtitle">Сохраненные URL и токен для выбранной интеграции</div>
+                    </div>
                 </div>
-                <button class="btn btn-sm" onclick="loadWebhookEvents()">🔄</button>
+                <div id="current-webhook-info">
+                    <span class="badge badge-muted">Выберите настройку iiko для просмотра</span>
+                </div>
             </div>
-            <div id="webhook-events-list">
-                <div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>
+
+            {{-- Webhook Events --}}
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Входящие события</div>
+                        <div class="card-subtitle">Последние вебхук-события от iiko</div>
+                    </div>
+                    <button class="btn btn-sm" onclick="loadWebhookEvents()">🔄</button>
+                </div>
+                <div id="webhook-events-list">
+                    <div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>
+                </div>
             </div>
         </div>
     </div>
@@ -656,6 +671,31 @@ async function registerWebhook() {
     }
 }
 
+function onWebhookSettingChange() {
+    const settingId = document.getElementById('webhook-setting-select').value;
+    const container = document.getElementById('current-webhook-info');
+    if (!settingId) {
+        container.innerHTML = '<span class="badge badge-muted">Выберите настройку iiko для просмотра</span>';
+        return;
+    }
+    const setting = settingsList.find(s => s.id == settingId);
+    if (setting) {
+        let html = '';
+        if (setting.webhook_url) {
+            html += '<div class="component-row"><div class="component-name" style="flex-direction:column;align-items:flex-start;">' +
+                '<span class="form-label" style="margin-bottom:2px;">URL вебхука:</span>' +
+                '<span class="mono" style="color:var(--accent);word-break:break-all;">' + escapeHtml(setting.webhook_url) + '</span>' +
+            '</div></div>';
+            html += '<div class="component-row"><div class="component-name">' +
+                '<span class="badge badge-success">✓ Вебхук настроен</span>' +
+            '</div></div>';
+        } else {
+            html += '<span class="badge badge-warning">⚠️ Вебхук не настроен для этой интеграции</span>';
+        }
+        container.innerHTML = html;
+    }
+}
+
 async function loadWebhookEvents() {
     const container = document.getElementById('webhook-events-list');
     container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>';
@@ -756,15 +796,24 @@ async function loadDataSection(type) {
                 });
             }
         } else if (type === 'payment-types') {
-            const types = data.paymentTypes || [];
-            if (types.length === 0) {
+            const ptGroups = data.paymentTypes || [];
+            if (ptGroups.length === 0) {
                 html += '<span class="badge badge-muted">Нет данных</span>';
             } else {
-                types.forEach(pt => {
-                    const items = pt.items || [];
-                    items.forEach(item => {
-                        html += '<div class="component-row"><div class="component-name">💳 ' + escapeHtml(item.name || item.id) + '</div><span class="badge badge-muted">' + escapeHtml(item.paymentTypeKind || '') + '</span></div>';
-                    });
+                ptGroups.forEach(pt => {
+                    const items = pt.items || pt.paymentTypes || [];
+                    if (items.length > 0) {
+                        html += '<div class="table-wrap" style="margin-bottom:8px;"><table><thead><tr><th>Название</th><th>Тип</th><th>Код</th><th>ID</th></tr></thead><tbody>';
+                        items.forEach(item => {
+                            html += '<tr>' +
+                                '<td><strong>💳 ' + escapeHtml(item.name || '—') + '</strong></td>' +
+                                '<td><span class="badge badge-muted">' + escapeHtml(item.paymentTypeKind || item.code || '') + '</span></td>' +
+                                '<td class="mono" style="font-size:11px;">' + escapeHtml(item.code || '') + '</td>' +
+                                '<td class="mono" style="font-size:11px;color:var(--muted);">' + escapeHtml((item.id || '').substring(0,8)) + '...</td>' +
+                            '</tr>';
+                        });
+                        html += '</tbody></table></div>';
+                    }
                 });
             }
         } else if (type === 'couriers') {
@@ -772,8 +821,84 @@ async function loadDataSection(type) {
             if (couriers.length === 0) {
                 html += '<span class="badge badge-muted">Нет курьеров</span>';
             } else {
+                html += '<div class="table-wrap"><table><thead><tr><th>Имя</th><th>Телефон</th><th>ID</th></tr></thead><tbody>';
                 couriers.forEach(c => {
-                    html += '<div class="component-row"><div class="component-name">🚴 ' + escapeHtml(c.displayName || c.name || c.id) + '</div></div>';
+                    html += '<tr>' +
+                        '<td><strong>🚴 ' + escapeHtml(c.displayName || c.name || c.firstName || '—') + '</strong></td>' +
+                        '<td>' + escapeHtml(c.phone || '—') + '</td>' +
+                        '<td class="mono" style="font-size:11px;color:var(--muted);">' + escapeHtml((c.id || '').substring(0,8)) + '...</td>' +
+                    '</tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+        } else if (type === 'order-types') {
+            const otGroups = data.orderTypes || [];
+            if (otGroups.length === 0) {
+                html += '<span class="badge badge-muted">Нет типов заказов</span>';
+            } else {
+                otGroups.forEach(og => {
+                    const items = og.items || og.orderTypes || [];
+                    if (items.length > 0) {
+                        html += '<div class="table-wrap" style="margin-bottom:8px;"><table><thead><tr><th>Название</th><th>Тип</th><th>Внешнее</th><th>ID</th></tr></thead><tbody>';
+                        items.forEach(item => {
+                            html += '<tr>' +
+                                '<td><strong>📦 ' + escapeHtml(item.name || '—') + '</strong></td>' +
+                                '<td><span class="badge badge-muted">' + escapeHtml(item.orderServiceType || '') + '</span></td>' +
+                                '<td>' + escapeHtml(item.externalRevision ? 'Да' : 'Нет') + '</td>' +
+                                '<td class="mono" style="font-size:11px;color:var(--muted);">' + escapeHtml((item.id || '').substring(0,8)) + '...</td>' +
+                            '</tr>';
+                        });
+                        html += '</tbody></table></div>';
+                    }
+                });
+            }
+        } else if (type === 'discount-types') {
+            const discounts = data.discounts || data.discountTypes || [];
+            if (discounts.length === 0 && !data.discounts) {
+                // Try alternate format
+                const dgGroups = Object.values(data).flat();
+                if (dgGroups.length === 0) {
+                    html += '<span class="badge badge-muted">Нет скидок/акций</span>';
+                } else {
+                    html += '<div class="json-view">' + escapeHtml(JSON.stringify(data, null, 2)) + '</div>';
+                }
+            } else {
+                const items = Array.isArray(discounts) ? discounts : [];
+                if (items.length === 0) {
+                    html += '<span class="badge badge-muted">Нет скидок/акций</span>';
+                } else {
+                    html += '<div class="table-wrap"><table><thead><tr><th>Название</th><th>Тип</th><th>Процент / Сумма</th><th>ID</th></tr></thead><tbody>';
+                    items.forEach(item => {
+                        html += '<tr>' +
+                            '<td><strong>🏷️ ' + escapeHtml(item.name || '—') + '</strong></td>' +
+                            '<td><span class="badge badge-muted">' + escapeHtml(item.type || item.discountType || '') + '</span></td>' +
+                            '<td>' + escapeHtml(item.percent ? item.percent + '%' : (item.sum || '—')) + '</td>' +
+                            '<td class="mono" style="font-size:11px;color:var(--muted);">' + escapeHtml((item.id || '').substring(0,8)) + '...</td>' +
+                        '</tr>';
+                    });
+                    html += '</tbody></table></div>';
+                }
+            }
+        } else if (type === 'stop-lists') {
+            const stopLists = data.terminalGroupStopLists || [];
+            if (stopLists.length === 0) {
+                html += '<span class="badge badge-muted">Нет данных стоп-листов</span>';
+            } else {
+                stopLists.forEach(tg => {
+                    const tgItems = tg.items || [];
+                    tgItems.forEach(terminal => {
+                        html += '<div style="margin-bottom:8px;font-weight:600;">Терминал: ' + escapeHtml(terminal.terminalGroupId || '').substring(0,8) + '...</div>';
+                        const stopItems = terminal.items || [];
+                        if (stopItems.length === 0) {
+                            html += '<span class="badge badge-success" style="margin-bottom:8px;">✓ Стоп-лист пуст</span>';
+                        } else {
+                            html += '<div class="table-wrap" style="margin-bottom:8px;"><table><thead><tr><th>Позиция</th><th>Баланс</th></tr></thead><tbody>';
+                            stopItems.forEach(si => {
+                                html += '<tr><td>🚫 ' + escapeHtml(si.productId || si.name || '—') + '</td><td>' + (si.balance || 0) + '</td></tr>';
+                            });
+                            html += '</tbody></table></div>';
+                        }
+                    });
                 });
             }
         } else {

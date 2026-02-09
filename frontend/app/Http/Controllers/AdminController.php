@@ -100,6 +100,39 @@ class AdminController extends Controller
         ]);
     }
 
+    public function menuPage(Request $request): View
+    {
+        return view('admin.menu', [
+            'user' => $request->session()->get('user'),
+            'username' => $request->session()->get('username'),
+            'displayName' => $request->session()->get('user.username')
+                ?? $request->session()->get('username')
+                ?? 'администратор',
+        ]);
+    }
+
+    public function ordersPage(Request $request): View
+    {
+        return view('admin.orders', [
+            'user' => $request->session()->get('user'),
+            'username' => $request->session()->get('username'),
+            'displayName' => $request->session()->get('user.username')
+                ?? $request->session()->get('username')
+                ?? 'администратор',
+        ]);
+    }
+
+    public function usersPage(Request $request): View
+    {
+        return view('admin.users', [
+            'user' => $request->session()->get('user'),
+            'username' => $request->session()->get('username'),
+            'displayName' => $request->session()->get('user.username')
+                ?? $request->session()->get('username')
+                ?? 'администратор',
+        ]);
+    }
+
     public function logout(Request $request): RedirectResponse
     {
         $request->session()->forget(['token', 'user', 'username']);
@@ -194,6 +227,13 @@ class AdminController extends Controller
         return $this->proxyPost($request, "/iiko/register-webhook?setting_id={$settingId}&domain=" . urlencode($domain));
     }
 
+    public function apiWebhookSettings(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        $orgId = $request->input('organization_id');
+        return $this->proxyPost($request, "/iiko/webhook-settings?setting_id={$settingId}&organization_id={$orgId}");
+    }
+
     public function apiWebhookEvents(Request $request): JsonResponse
     {
         return $this->proxyGet($request, '/webhooks/events');
@@ -202,6 +242,49 @@ class AdminController extends Controller
     public function apiLogs(Request $request): JsonResponse
     {
         return $this->proxyGet($request, '/logs');
+    }
+
+    public function apiMenu(Request $request): JsonResponse
+    {
+        return $this->proxyGet($request, '/menu?' . http_build_query($request->only(['skip', 'limit'])));
+    }
+
+    public function apiIikoMenu(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        $orgId = $request->input('organization_id');
+        return $this->proxyPost($request, "/iiko/menu?setting_id={$settingId}&organization_id={$orgId}");
+    }
+
+    public function apiSyncMenu(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        $orgId = $request->input('organization_id');
+        return $this->proxyPost($request, "/iiko/sync-menu?setting_id={$settingId}&organization_id={$orgId}");
+    }
+
+    public function apiOrders(Request $request): JsonResponse
+    {
+        $query = http_build_query($request->only(['status_filter', 'skip', 'limit']));
+        return $this->proxyGet($request, '/orders?' . $query);
+    }
+
+    public function apiIikoDeliveries(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        $orgId = $request->input('organization_id');
+        $statuses = $request->input('statuses', '');
+        return $this->proxyPost($request, "/iiko/deliveries?setting_id={$settingId}&organization_id={$orgId}&statuses=" . urlencode($statuses));
+    }
+
+    public function apiUsers(Request $request): JsonResponse
+    {
+        return $this->proxyGet($request, '/users');
+    }
+
+    public function apiUpdateUserRole(Request $request, int $userId): JsonResponse
+    {
+        return $this->proxyPut($request, "/users/{$userId}/role", $request->only(['role']));
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────

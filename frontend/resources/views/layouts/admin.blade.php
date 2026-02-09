@@ -525,16 +525,16 @@
                 <span class="icon">🔧</span> Обслуживание
             </a>
 
-            <div class="sidebar-section">Скоро</div>
-            <span class="sidebar-link" style="opacity:0.4;cursor:default;">
+            <div class="sidebar-section">Управление</div>
+            <a href="{{ route('admin.menu') }}" class="sidebar-link @if(request()->routeIs('admin.menu')) active @endif">
                 <span class="icon">📋</span> Меню
-            </span>
-            <span class="sidebar-link" style="opacity:0.4;cursor:default;">
+            </a>
+            <a href="{{ route('admin.orders') }}" class="sidebar-link @if(request()->routeIs('admin.orders')) active @endif">
                 <span class="icon">🛒</span> Заказы
-            </span>
-            <span class="sidebar-link" style="opacity:0.4;cursor:default;">
+            </a>
+            <a href="{{ route('admin.users') }}" class="sidebar-link @if(request()->routeIs('admin.users')) active @endif">
                 <span class="icon">👥</span> Пользователи
-            </span>
+            </a>
         </nav>
 
         <div class="sidebar-footer">
