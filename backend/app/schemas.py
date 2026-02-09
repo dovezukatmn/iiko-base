@@ -120,3 +120,40 @@ class ApiLogResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# --- Loyalty / iikoCard ---
+class CustomerSearch(BaseModel):
+    organization_id: str
+    customer_id: Optional[str] = None
+    phone: Optional[str] = None
+    card_track: Optional[str] = None
+    card_number: Optional[str] = None
+    email: Optional[str] = None
+
+
+class CustomerCreate(BaseModel):
+    organization_id: str
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    card_track: Optional[str] = None
+    card_number: Optional[str] = None
+    birthday: Optional[str] = None
+
+
+class LoyaltyBalanceOperation(BaseModel):
+    organization_id: str
+    customer_id: str
+    wallet_id: str
+    amount: float = Field(..., gt=0)
+    comment: Optional[str] = ""
+
+
+# --- Admin User Management ---
+class AdminUserCreate(BaseModel):
+    email: str = Field(..., min_length=5, max_length=255)
+    username: str = Field(..., min_length=3, max_length=100)
+    password: str = Field(..., min_length=6, max_length=128)
+    role: str = Field("viewer", pattern="^(admin|manager|operator|viewer)$")
+    is_active: bool = True

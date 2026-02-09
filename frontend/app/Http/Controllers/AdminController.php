@@ -287,6 +287,84 @@ class AdminController extends Controller
         return $this->proxyPut($request, "/users/{$userId}/role", $request->only(['role']));
     }
 
+    public function apiCreateUser(Request $request): JsonResponse
+    {
+        return $this->proxyPost($request, '/users', $request->only(['email', 'username', 'password', 'role', 'is_active']));
+    }
+
+    public function apiDeleteUser(Request $request, int $userId): JsonResponse
+    {
+        $token = $request->session()->get('token');
+        try {
+            $response = Http::withToken($token)->timeout(15)->delete("{$this->apiBase}/users/{$userId}");
+            return response()->json($response->json(), $response->status());
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'Ошибка подключения к API: ' . $e->getMessage()], 502);
+        }
+    }
+
+    public function apiToggleUserActive(Request $request, int $userId): JsonResponse
+    {
+        return $this->proxyPut($request, "/users/{$userId}/toggle-active");
+    }
+
+    // ─── Loyalty / iikoCard API Proxy Methods ───────────────────────────
+
+    public function apiLoyaltyPrograms(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        $orgId = $request->input('organization_id');
+        return $this->proxyPost($request, "/iiko/loyalty/programs?setting_id={$settingId}&organization_id={$orgId}");
+    }
+
+    public function apiLoyaltyCustomerInfo(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        return $this->proxyPost($request, "/iiko/loyalty/customer-info?setting_id={$settingId}", $request->only([
+            'organization_id', 'customer_id', 'phone', 'card_track', 'card_number', 'email',
+        ]));
+    }
+
+    public function apiLoyaltyCreateCustomer(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        return $this->proxyPost($request, "/iiko/loyalty/customer?setting_id={$settingId}", $request->only([
+            'organization_id', 'name', 'phone', 'email', 'card_track', 'card_number', 'birthday',
+        ]));
+    }
+
+    public function apiLoyaltyBalance(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        $orgId = $request->input('organization_id');
+        $customerId = $request->input('customer_id');
+        return $this->proxyPost($request, "/iiko/loyalty/balance?setting_id={$settingId}&organization_id={$orgId}&customer_id={$customerId}");
+    }
+
+    public function apiLoyaltyTopup(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        return $this->proxyPost($request, "/iiko/loyalty/topup?setting_id={$settingId}", $request->only([
+            'organization_id', 'customer_id', 'wallet_id', 'amount', 'comment',
+        ]));
+    }
+
+    public function apiLoyaltyWithdraw(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        return $this->proxyPost($request, "/iiko/loyalty/withdraw?setting_id={$settingId}", $request->only([
+            'organization_id', 'customer_id', 'wallet_id', 'amount', 'comment',
+        ]));
+    }
+
+    public function apiLoyaltyHold(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        return $this->proxyPost($request, "/iiko/loyalty/hold?setting_id={$settingId}", $request->only([
+            'organization_id', 'customer_id', 'wallet_id', 'amount', 'comment',
+        ]));
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────
 
     private function proxyGet(Request $request, string $path): JsonResponse
@@ -294,6 +372,12 @@ class AdminController extends Controller
         $token = $request->session()->get('token');
         try {
             $response = Http::withToken($token)->timeout(15)->get("{$this->apiBase}{$path}");
+            if ($response->status() === 401) {
+                $detail = $response->json('detail') ?? '';
+                if (str_contains($detail, 'Сессия') || str_contains($detail, 'токен')) {
+                    return response()->json(['error' => $detail, 'session_expired' => true], 401);
+                }
+            }
             return response()->json($response->json(), $response->status());
         } catch (\Throwable $e) {
             return response()->json(['error' => 'Ошибка подключения к API: ' . $e->getMessage()], 502);
@@ -305,6 +389,12 @@ class AdminController extends Controller
         $token = $request->session()->get('token');
         try {
             $response = Http::withToken($token)->timeout(15)->post("{$this->apiBase}{$path}", $body);
+            if ($response->status() === 401) {
+                $detail = $response->json('detail') ?? '';
+                if (str_contains($detail, 'Сессия') || str_contains($detail, 'токен')) {
+                    return response()->json(['error' => $detail, 'session_expired' => true], 401);
+                }
+            }
             return response()->json($response->json(), $response->status());
         } catch (\Throwable $e) {
             return response()->json(['error' => 'Ошибка подключения к API: ' . $e->getMessage()], 502);
@@ -316,6 +406,12 @@ class AdminController extends Controller
         $token = $request->session()->get('token');
         try {
             $response = Http::withToken($token)->timeout(15)->put("{$this->apiBase}{$path}", $body);
+            if ($response->status() === 401) {
+                $detail = $response->json('detail') ?? '';
+                if (str_contains($detail, 'Сессия') || str_contains($detail, 'токен')) {
+                    return response()->json(['error' => $detail, 'session_expired' => true], 401);
+                }
+            }
             return response()->json($response->json(), $response->status());
         } catch (\Throwable $e) {
             return response()->json(['error' => 'Ошибка подключения к API: ' . $e->getMessage()], 502);

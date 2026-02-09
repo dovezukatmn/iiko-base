@@ -49,7 +49,19 @@ Route::middleware('admin.session')->group(function () {
     Route::get('/admin/api/orders', [AdminController::class, 'apiOrders'])->name('admin.api.orders');
     Route::post('/admin/api/iiko-deliveries', [AdminController::class, 'apiIikoDeliveries'])->name('admin.api.iiko_deliveries');
     Route::get('/admin/api/users', [AdminController::class, 'apiUsers'])->name('admin.api.users');
+    Route::post('/admin/api/users', [AdminController::class, 'apiCreateUser'])->name('admin.api.users.create');
     Route::put('/admin/api/users/{userId}/role', [AdminController::class, 'apiUpdateUserRole'])->name('admin.api.users.update_role');
+    Route::delete('/admin/api/users/{userId}', [AdminController::class, 'apiDeleteUser'])->name('admin.api.users.delete');
+    Route::put('/admin/api/users/{userId}/toggle-active', [AdminController::class, 'apiToggleUserActive'])->name('admin.api.users.toggle_active');
+
+    // Loyalty / iikoCard API proxy routes
+    Route::post('/admin/api/iiko-loyalty-programs', [AdminController::class, 'apiLoyaltyPrograms'])->name('admin.api.iiko_loyalty_programs');
+    Route::post('/admin/api/iiko-loyalty-customer-info', [AdminController::class, 'apiLoyaltyCustomerInfo'])->name('admin.api.iiko_loyalty_customer_info');
+    Route::post('/admin/api/iiko-loyalty-customer', [AdminController::class, 'apiLoyaltyCreateCustomer'])->name('admin.api.iiko_loyalty_customer');
+    Route::post('/admin/api/iiko-loyalty-balance', [AdminController::class, 'apiLoyaltyBalance'])->name('admin.api.iiko_loyalty_balance');
+    Route::post('/admin/api/iiko-loyalty-topup', [AdminController::class, 'apiLoyaltyTopup'])->name('admin.api.iiko_loyalty_topup');
+    Route::post('/admin/api/iiko-loyalty-withdraw', [AdminController::class, 'apiLoyaltyWithdraw'])->name('admin.api.iiko_loyalty_withdraw');
+    Route::post('/admin/api/iiko-loyalty-hold', [AdminController::class, 'apiLoyaltyHold'])->name('admin.api.iiko_loyalty_hold');
 
     Route::post('/logout', [AdminController::class, 'logout'])->name('logout');
 });

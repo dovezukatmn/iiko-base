@@ -46,6 +46,7 @@
     <button class="tab-btn" onclick="switchTab('settings', event)">⚙️ Настройки API</button>
     <button class="tab-btn" onclick="switchTab('webhooks', event)">🔗 Вебхуки</button>
     <button class="tab-btn" onclick="switchTab('data', event)">📋 Данные iiko</button>
+    <button class="tab-btn" onclick="switchTab('loyalty', event)">🎁 Лояльность</button>
     <button class="tab-btn" onclick="switchTab('logs', event)">📝 Логи</button>
 </div>
 
@@ -368,6 +369,120 @@
     </div>
 </div>
 
+{{-- ═══ TAB: Loyalty / iikoCard ═══ --}}
+<div class="tab-content" id="tab-loyalty">
+    <div class="grid-2 section-gap">
+        {{-- Loyalty Programs --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">🎁 Программы лояльности</div>
+                    <div class="card-subtitle">Бонусные программы из iiko</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadLoyaltyPrograms()" id="btn-load-programs">📥 Загрузить</button>
+            </div>
+            <div id="loyalty-programs-list">
+                <span class="badge badge-muted">Выберите настройку API и нажмите «Загрузить»</span>
+            </div>
+        </div>
+
+        {{-- Customer Search --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">🔍 Поиск гостя</div>
+                    <div class="card-subtitle">Поиск в программе лояльности</div>
+                </div>
+            </div>
+            <div class="settings-form">
+                <div class="form-group">
+                    <label class="form-label">Телефон или email</label>
+                    <input class="form-input" id="loyalty-search-query" placeholder="+7XXXXXXXXXX или email">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Тип поиска</label>
+                    <select class="form-input" id="loyalty-search-type">
+                        <option value="phone">По телефону</option>
+                        <option value="email">По email</option>
+                        <option value="cardNumber">По номеру карты</option>
+                        <option value="cardTrack">По треку карты</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="searchLoyaltyCustomer()">🔍 Найти</button>
+            </div>
+            <div id="loyalty-customer-info" style="margin-top:12px;"></div>
+        </div>
+    </div>
+
+    {{-- Customer Balance & Operations --}}
+    <div class="card section-gap">
+        <div class="card-header">
+            <div>
+                <div class="card-title">💰 Управление бонусами</div>
+                <div class="card-subtitle">Пополнение, списание и холдирование бонусов</div>
+            </div>
+        </div>
+        <div id="loyalty-balance-section">
+            <span class="badge badge-muted">Найдите гостя для работы с бонусами</span>
+        </div>
+
+        <div id="loyalty-operations" style="display:none;margin-top:16px;">
+            <div class="grid-3">
+                <div class="form-group">
+                    <label class="form-label">ID кошелька</label>
+                    <select class="form-input" id="loyalty-wallet-id"></select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Сумма</label>
+                    <input class="form-input" id="loyalty-amount" type="number" step="0.01" min="0.01" placeholder="100.00">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Комментарий</label>
+                    <input class="form-input" id="loyalty-comment" placeholder="Необязательно">
+                </div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn btn-success" onclick="loyaltyTopup()">➕ Пополнить</button>
+                <button class="btn btn-danger" onclick="loyaltyWithdraw()">➖ Списать</button>
+                <button class="btn" onclick="loyaltyHold()">🔒 Холдировать</button>
+            </div>
+            <div id="loyalty-operation-result" style="margin-top:12px;"></div>
+        </div>
+    </div>
+
+    {{-- Create/Update Customer --}}
+    <div class="card section-gap">
+        <div class="card-header">
+            <div>
+                <div class="card-title">➕ Создать / обновить гостя</div>
+                <div class="card-subtitle">Добавление нового гостя в программу лояльности</div>
+            </div>
+        </div>
+        <div class="settings-form">
+            <div class="grid-2">
+                <div class="form-group">
+                    <label class="form-label">Имя</label>
+                    <input class="form-input" id="new-customer-name" placeholder="Иван Петров">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Телефон</label>
+                    <input class="form-input" id="new-customer-phone" placeholder="+79001234567">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input class="form-input" id="new-customer-email" placeholder="email@example.com">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Дата рождения</label>
+                    <input class="form-input" id="new-customer-birthday" type="date">
+                </div>
+            </div>
+            <button class="btn btn-primary" onclick="createOrUpdateCustomer()">💾 Сохранить</button>
+            <div id="new-customer-result" style="margin-top:12px;"></div>
+        </div>
+    </div>
+</div>
+
 {{-- ═══ TAB: Logs ═══ --}}
 <div class="tab-content" id="tab-logs">
     <div class="card">
@@ -404,6 +519,7 @@ function switchTab(name, evt) {
     if (name === 'settings') loadSettings();
     if (name === 'webhooks') { loadSettings(); loadWebhookEvents(); }
     if (name === 'data') loadSettings();
+    if (name === 'loyalty') loadSettings();
     if (name === 'logs') loadLogs();
 }
 
@@ -942,6 +1058,139 @@ async function loadLogs() {
     } catch (err) {
         container.innerHTML = '<div class="alert alert-danger">⚠️ ' + escapeHtml(err.message) + '</div>';
     }
+}
+
+// ─── Loyalty Tab ─────────────────────────────────────────
+let currentCustomerId = null;
+
+async function loadLoyaltyPrograms() {
+    if (!currentSettingId) { alert('Сначала создайте или выберите настройку API'); return; }
+    const setting = settingsList.find(s => s.id === currentSettingId);
+    if (!setting || !setting.organization_id) { alert('Укажите organization_id в настройках API'); return; }
+    const container = document.getElementById('loyalty-programs-list');
+    container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>';
+    try {
+        const result = await apiPost('/admin/api/iiko-loyalty-programs', { setting_id: currentSettingId, organization_id: setting.organization_id });
+        if (result.status >= 400) { container.innerHTML = '<div class="alert alert-danger">⚠️ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>'; return; }
+        const programs = result.data.programs || result.data || [];
+        if (!Array.isArray(programs) || programs.length === 0) {
+            container.innerHTML = '<span class="badge badge-muted">Программы лояльности не найдены</span>';
+            return;
+        }
+        let html = '';
+        programs.forEach(p => {
+            html += '<div style="padding:10px;border-bottom:1px solid var(--border);">' +
+                '<div style="font-weight:600;color:var(--text-bright);">' + escapeHtml(p.name || p.id || '—') + '</div>' +
+                '<div style="font-size:12px;color:var(--muted);">ID: ' + escapeHtml(p.id || '—') + '</div>' +
+                (p.description ? '<div style="font-size:12px;color:var(--text);margin-top:4px;">' + escapeHtml(p.description) + '</div>' : '') +
+                '</div>';
+        });
+        container.innerHTML = html;
+    } catch (err) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>'; }
+}
+
+async function searchLoyaltyCustomer() {
+    if (!currentSettingId) { alert('Сначала создайте или выберите настройку API'); return; }
+    const setting = settingsList.find(s => s.id === currentSettingId);
+    if (!setting || !setting.organization_id) { alert('Укажите organization_id в настройках API'); return; }
+    const query = document.getElementById('loyalty-search-query').value.trim();
+    const searchType = document.getElementById('loyalty-search-type').value;
+    if (!query) { alert('Введите значение для поиска'); return; }
+    const container = document.getElementById('loyalty-customer-info');
+    container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Поиск...</div>';
+    const body = { setting_id: currentSettingId, organization_id: setting.organization_id };
+    body[searchType] = query;
+    try {
+        const result = await apiPost('/admin/api/iiko-loyalty-customer-info', body);
+        if (result.status >= 400) { container.innerHTML = '<div class="alert alert-danger">⚠️ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>'; return; }
+        const customer = result.data;
+        currentCustomerId = customer.id || null;
+        let html = '<div class="data-section">' +
+            '<div style="font-weight:600;color:var(--text-bright);margin-bottom:8px;">👤 ' + escapeHtml(customer.name || '—') + '</div>' +
+            '<div style="font-size:13px;color:var(--text);">ID: <span class="mono">' + escapeHtml(customer.id || '—') + '</span></div>' +
+            '<div style="font-size:13px;color:var(--text);">Телефон: ' + escapeHtml(customer.phone || '—') + '</div>' +
+            '<div style="font-size:13px;color:var(--text);">Email: ' + escapeHtml(customer.email || '—') + '</div>' +
+            '</div>';
+        container.innerHTML = html;
+        if (currentCustomerId) loadCustomerBalance();
+    } catch (err) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>'; }
+}
+
+async function loadCustomerBalance() {
+    if (!currentSettingId || !currentCustomerId) return;
+    const setting = settingsList.find(s => s.id === currentSettingId);
+    if (!setting || !setting.organization_id) return;
+    const container = document.getElementById('loyalty-balance-section');
+    container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка баланса...</div>';
+    try {
+        const result = await apiPost('/admin/api/iiko-loyalty-balance', { setting_id: currentSettingId, organization_id: setting.organization_id, customer_id: currentCustomerId });
+        if (result.status >= 400) { container.innerHTML = '<div class="alert alert-danger">⚠️ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>'; return; }
+        const wallets = result.data.wallets || result.data || [];
+        let html = '<div class="grid-3">';
+        const walletSelect = document.getElementById('loyalty-wallet-id');
+        walletSelect.innerHTML = '';
+        if (Array.isArray(wallets) && wallets.length > 0) {
+            wallets.forEach(w => {
+                html += '<div class="card stat-card">' +
+                    '<span class="stat-label">' + escapeHtml(w.name || w.walletId || 'Кошелек') + '</span>' +
+                    '<span class="stat-value" style="font-size:24px;">' + (w.balance != null ? w.balance : '—') + '</span>' +
+                    '</div>';
+                walletSelect.innerHTML += '<option value="' + escapeHtml(w.walletId || w.id || '') + '">' + escapeHtml(w.name || w.walletId || 'Кошелек') + ' (баланс: ' + (w.balance || 0) + ')</option>';
+            });
+        } else {
+            html += '<span class="badge badge-muted">Кошельки не найдены</span>';
+        }
+        html += '</div>';
+        container.innerHTML = html;
+        document.getElementById('loyalty-operations').style.display = (Array.isArray(wallets) && wallets.length > 0) ? 'block' : 'none';
+    } catch (err) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>'; }
+}
+
+async function loyaltyTopup() { await loyaltyOperation('topup', '➕ Пополнение'); }
+async function loyaltyWithdraw() { await loyaltyOperation('withdraw', '➖ Списание'); }
+async function loyaltyHold() { await loyaltyOperation('hold', '🔒 Холдирование'); }
+
+async function loyaltyOperation(type, label) {
+    if (!currentSettingId || !currentCustomerId) { alert('Сначала найдите гостя'); return; }
+    const setting = settingsList.find(s => s.id === currentSettingId);
+    if (!setting || !setting.organization_id) return;
+    const walletId = document.getElementById('loyalty-wallet-id').value;
+    const amount = parseFloat(document.getElementById('loyalty-amount').value);
+    const comment = document.getElementById('loyalty-comment').value;
+    if (!walletId || !amount || amount <= 0) { alert('Укажите кошелек и сумму'); return; }
+    const container = document.getElementById('loyalty-operation-result');
+    container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Выполнение...</div>';
+    try {
+        const result = await apiPost('/admin/api/iiko-loyalty-' + type, {
+            setting_id: currentSettingId, organization_id: setting.organization_id,
+            customer_id: currentCustomerId, wallet_id: walletId, amount: amount, comment: comment,
+        });
+        if (result.status >= 400) { container.innerHTML = '<div class="alert alert-danger">⚠️ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>'; return; }
+        container.innerHTML = '<div class="alert alert-success">✅ ' + label + ' выполнено успешно</div>';
+        loadCustomerBalance();
+    } catch (err) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>'; }
+}
+
+async function createOrUpdateCustomer() {
+    if (!currentSettingId) { alert('Сначала создайте или выберите настройку API'); return; }
+    const setting = settingsList.find(s => s.id === currentSettingId);
+    if (!setting || !setting.organization_id) { alert('Укажите organization_id в настройках API'); return; }
+    const container = document.getElementById('new-customer-result');
+    container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Сохранение...</div>';
+    const body = {
+        setting_id: currentSettingId,
+        organization_id: setting.organization_id,
+        name: document.getElementById('new-customer-name').value.trim(),
+        phone: document.getElementById('new-customer-phone').value.trim(),
+        email: document.getElementById('new-customer-email').value.trim(),
+        birthday: document.getElementById('new-customer-birthday').value || null,
+    };
+    if (!body.name && !body.phone) { container.innerHTML = '<div class="alert alert-danger">Укажите имя или телефон</div>'; return; }
+    try {
+        const result = await apiPost('/admin/api/iiko-loyalty-customer', body);
+        if (result.status >= 400) { container.innerHTML = '<div class="alert alert-danger">⚠️ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>'; return; }
+        container.innerHTML = '<div class="alert alert-success">✅ Гость сохранен. ID: ' + escapeHtml(result.data.id || JSON.stringify(result.data)) + '</div>';
+    } catch (err) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>'; }
 }
 
 // ─── Init ────────────────────────────────────────────────

@@ -20,6 +20,8 @@ from app.schemas import (
     IikoSettingsCreate, IikoSettingsResponse, IikoSettingsUpdate,
     OrderResponse, OrderCreate, PasswordChange,
     WebhookEventResponse, ApiLogResponse,
+    CustomerSearch, CustomerCreate, LoyaltyBalanceOperation,
+    AdminUserCreate,
 )
 from app.auth import (
     get_password_hash, verify_password, create_access_token,
@@ -807,3 +809,216 @@ async def get_iiko_deliveries(
         return await svc.get_deliveries_by_statuses(organization_id, status_list)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Ошибка получения заказов: {str(e)}")
+
+
+# ─── Loyalty / iikoCard ──────────────────────────────────────────────────
+@api_router.post("/iiko/loyalty/programs", tags=["loyalty"])
+async def get_loyalty_programs(
+    setting_id: int,
+    organization_id: str,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Получить список программ лояльности (бонусных программ)"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+    svc = IikoService(db, rec)
+    try:
+        return await svc.get_loyalty_programs([organization_id])
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Ошибка получения программ лояльности: {str(e)}")
+
+
+@api_router.post("/iiko/loyalty/customer-info", tags=["loyalty"])
+async def get_loyalty_customer_info(
+    data: CustomerSearch,
+    setting_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Получить информацию о госте программы лояльности"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+    svc = IikoService(db, rec)
+    try:
+        return await svc.get_customer_info(
+            organization_id=data.organization_id,
+            customer_id=data.customer_id,
+            phone=data.phone,
+            card_track=data.card_track,
+            card_number=data.card_number,
+            email=data.email,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Ошибка получения данных гостя: {str(e)}")
+
+
+@api_router.post("/iiko/loyalty/customer", tags=["loyalty"])
+async def create_or_update_loyalty_customer(
+    data: CustomerCreate,
+    setting_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("manager")),
+):
+    """Создать или обновить гостя в программе лояльности"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+    svc = IikoService(db, rec)
+    try:
+        return await svc.create_or_update_customer(
+            organization_id=data.organization_id,
+            name=data.name,
+            phone=data.phone,
+            email=data.email,
+            card_track=data.card_track,
+            card_number=data.card_number,
+            birthday=data.birthday,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Ошибка создания/обновления гостя: {str(e)}")
+
+
+@api_router.post("/iiko/loyalty/balance", tags=["loyalty"])
+async def get_loyalty_balance(
+    setting_id: int,
+    organization_id: str,
+    customer_id: str,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Получить баланс бонусов гостя"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+    svc = IikoService(db, rec)
+    try:
+        return await svc.get_customer_balance(organization_id, customer_id)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Ошибка получения баланса: {str(e)}")
+
+
+@api_router.post("/iiko/loyalty/topup", tags=["loyalty"])
+async def topup_loyalty(
+    data: LoyaltyBalanceOperation,
+    setting_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("manager")),
+):
+    """Пополнить бонусный баланс гостя"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+    svc = IikoService(db, rec)
+    try:
+        return await svc.topup_loyalty_balance(
+            data.organization_id, data.customer_id,
+            data.wallet_id, data.amount, data.comment or "",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Ошибка пополнения баланса: {str(e)}")
+
+
+@api_router.post("/iiko/loyalty/withdraw", tags=["loyalty"])
+async def withdraw_loyalty(
+    data: LoyaltyBalanceOperation,
+    setting_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("manager")),
+):
+    """Списать бонусы с баланса гостя"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+    svc = IikoService(db, rec)
+    try:
+        return await svc.withdraw_loyalty_balance(
+            data.organization_id, data.customer_id,
+            data.wallet_id, data.amount, data.comment or "",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Ошибка списания бонусов: {str(e)}")
+
+
+@api_router.post("/iiko/loyalty/hold", tags=["loyalty"])
+async def hold_loyalty(
+    data: LoyaltyBalanceOperation,
+    setting_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("manager")),
+):
+    """Холдировать (заморозить) бонусы гостя"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+    svc = IikoService(db, rec)
+    try:
+        return await svc.hold_loyalty_balance(
+            data.organization_id, data.customer_id,
+            data.wallet_id, data.amount, data.comment or "",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Ошибка холдирования бонусов: {str(e)}")
+
+
+# ─── Admin User Management ──────────────────────────────────────────────
+@api_router.post("/users", tags=["users"], response_model=UserResponse, status_code=201)
+async def admin_create_user(
+    user_in: AdminUserCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """Создать пользователя с назначением роли (только admin)"""
+    if db.query(User).filter(User.email == user_in.email).first():
+        raise HTTPException(status_code=400, detail="Email уже зарегистрирован")
+    if db.query(User).filter(User.username == user_in.username).first():
+        raise HTTPException(status_code=400, detail="Имя пользователя занято")
+    user = User(
+        email=user_in.email,
+        username=user_in.username,
+        hashed_password=get_password_hash(user_in.password),
+        role=user_in.role,
+        is_active=user_in.is_active,
+        is_superuser=(user_in.role == "admin"),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@api_router.delete("/users/{user_id}", tags=["users"])
+async def admin_delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """Удалить пользователя (только admin, нельзя удалить себя)"""
+    if current_user.id == user_id:
+        raise HTTPException(status_code=400, detail="Нельзя удалить собственную учетную запись")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    db.delete(user)
+    db.commit()
+    return {"detail": "Пользователь удален"}
+
+
+@api_router.put("/users/{user_id}/toggle-active", tags=["users"])
+async def admin_toggle_user_active(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """Включить/выключить пользователя (только admin)"""
+    if current_user.id == user_id:
+        raise HTTPException(status_code=400, detail="Нельзя деактивировать собственную учетную запись")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    user.is_active = not user.is_active
+    db.commit()
+    db.refresh(user)
+    return {"detail": f"Пользователь {'активирован' if user.is_active else 'деактивирован'}", "is_active": user.is_active}
