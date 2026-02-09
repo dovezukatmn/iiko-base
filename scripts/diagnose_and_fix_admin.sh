@@ -439,8 +439,8 @@ else
                 cp .env.example .env
                 # Update DATABASE_URL in .env if needed
                 if [ -f ".env" ]; then
-                    # Update DATABASE_URL to match current configuration
-                    sed -i "s|DATABASE_URL=.*|DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}|g" .env
+                    # Update DATABASE_URL to match current configuration (|| true to ignore errors)
+                    sed -i "s|DATABASE_URL=.*|DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}|g" .env || true
                 fi
                 echo "  Created .env from .env.example"
             fi
