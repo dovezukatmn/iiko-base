@@ -671,13 +671,16 @@ function renderSettingsList() {
     let html = '';
     settingsList.forEach(s => {
         const isSelected = currentSettingId === s.id;
+        const orgDisplay = s.organization_name 
+            ? escapeHtml(s.organization_name)
+            : (s.organization_id ? escapeHtml(s.organization_id) : null);
         html += '<div class="component-row" style="cursor:pointer;' + (isSelected ? 'background:rgba(99,102,241,0.08);border-radius:8px;padding:10px;' : '') + '" onclick="selectSetting(' + s.id + ')">' +
             '<div class="component-name">' +
                 '<span class="status-dot ' + (s.is_active ? 'online' : 'offline') + '"></span>' +
                 '<div>' +
                     '<div style="font-weight:600;">Интеграция #' + s.id + '</div>' +
                     '<div style="font-size:11px;color:var(--muted);">' + escapeHtml(s.api_url) + '</div>' +
-                    (s.organization_id ? '<div style="font-size:11px;color:var(--accent-2);">Org: ' + escapeHtml(s.organization_id) + '</div>' : '') +
+                    (orgDisplay ? '<div style="font-size:11px;color:var(--accent-2);">Org: ' + orgDisplay + '</div>' : '') +
                     (s.webhook_url ? '<div style="font-size:11px;color:var(--success);">Webhook: ✓</div>' : '') +
                 '</div>' +
             '</div>' +
@@ -779,6 +782,7 @@ function populateOrgSelect(sel, orgs) {
         const name = org.name || id;
         const opt = document.createElement('option');
         opt.value = id;
+        opt.setAttribute('data-org-name', name);
         opt.textContent = name + ' (' + id.substring(0, 8) + '...)';
         sel.appendChild(opt);
     });
@@ -802,7 +806,10 @@ function populateSettingSelects() {
         if (!sel) return;
         sel.innerHTML = '<option value="">Выберите настройку...</option>';
         settingsList.forEach(s => {
-            sel.innerHTML += '<option value="' + s.id + '">Интеграция #' + s.id + (s.organization_id ? ' (' + escapeHtml(s.organization_id).substring(0,8) + '...)' : '') + '</option>';
+            const label = s.organization_name 
+                ? escapeHtml(s.organization_name) + ' (ID: #' + s.id + ')'
+                : 'Интеграция #' + s.id + (s.organization_id ? ' (' + escapeHtml(s.organization_id).substring(0,8) + '...)' : '');
+            sel.innerHTML += '<option value="' + s.id + '">' + label + '</option>';
         });
     });
 }
@@ -822,9 +829,18 @@ async function saveSettings() {
         return;
     }
 
+    // Get organization name from the selected option's data attribute
+    let orgName = null;
+    if (orgIdFromSelect) {
+        const sel = document.getElementById('org-id-select');
+        const selectedOption = sel.options[sel.selectedIndex];
+        orgName = selectedOption ? selectedOption.getAttribute('data-org-name') : null;
+    }
+
     const body = {
         api_url: apiUrl || 'https://api-ru.iiko.services/api/1',
         organization_id: orgId || null,
+        organization_name: orgName || null,
     };
 
     // Only include api_key if it's provided (non-empty)

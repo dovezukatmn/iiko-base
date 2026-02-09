@@ -44,11 +44,13 @@ class IikoSettingsCreate(BaseModel):
     api_key: str = Field(..., min_length=1)
     api_url: str = "https://api-ru.iiko.services/api/1"
     organization_id: Optional[str] = None
+    organization_name: Optional[str] = None
 
 
 class IikoSettingsResponse(BaseModel):
     id: int
     organization_id: Optional[str] = None
+    organization_name: Optional[str] = None
     api_url: str
     webhook_url: Optional[str] = None
     is_active: bool
@@ -63,6 +65,7 @@ class IikoSettingsUpdate(BaseModel):
     api_key: Optional[str] = None
     api_url: Optional[str] = None
     organization_id: Optional[str] = None
+    organization_name: Optional[str] = None
 
 
 # --- Orders ---

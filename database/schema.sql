@@ -67,6 +67,7 @@ ON CONFLICT (username) DO NOTHING;
 CREATE TABLE IF NOT EXISTS iiko_settings (
     id SERIAL PRIMARY KEY,
     organization_id VARCHAR(255),
+    organization_name VARCHAR(255),
     api_key VARCHAR(500) NOT NULL,
     api_url VARCHAR(500) DEFAULT 'https://api-ru.iiko.services/api/1',
     webhook_url VARCHAR(500),

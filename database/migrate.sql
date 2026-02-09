@@ -73,6 +73,7 @@ CREATE TRIGGER update_menu_items_updated_at BEFORE UPDATE ON menu_items
 CREATE TABLE IF NOT EXISTS iiko_settings (
     id SERIAL PRIMARY KEY,
     organization_id VARCHAR(255),
+    organization_name VARCHAR(255),
     api_key VARCHAR(500) NOT NULL,
     api_url VARCHAR(500) DEFAULT 'https://api-ru.iiko.services/api/1',
     webhook_url VARCHAR(500),
@@ -82,6 +83,9 @@ CREATE TABLE IF NOT EXISTS iiko_settings (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Add organization_name column if it doesn't exist
+ALTER TABLE iiko_settings ADD COLUMN IF NOT EXISTS organization_name VARCHAR(255);
 
 DROP TRIGGER IF EXISTS update_iiko_settings_updated_at ON iiko_settings;
 CREATE TRIGGER update_iiko_settings_updated_at BEFORE UPDATE ON iiko_settings

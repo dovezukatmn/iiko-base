@@ -227,6 +227,7 @@ async def create_iiko_settings(
         api_key=data.api_key,
         api_url=data.api_url,
         organization_id=data.organization_id,
+        organization_name=data.organization_name,
         webhook_secret=webhook_secret,
     )
     if settings.WEBHOOK_BASE_URL:
@@ -254,6 +255,8 @@ async def update_iiko_settings(
         rec.api_url = data.api_url
     if data.organization_id is not None:
         rec.organization_id = data.organization_id
+    if data.organization_name is not None:
+        rec.organization_name = data.organization_name
     db.commit()
     db.refresh(rec)
     return rec

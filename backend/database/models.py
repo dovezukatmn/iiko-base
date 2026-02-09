@@ -41,6 +41,7 @@ class IikoSettings(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(String(255), nullable=True)
+    organization_name = Column(String(255), nullable=True)
     api_key = Column(String(500), nullable=False)
     api_url = Column(String(500), default="https://api-ru.iiko.services/api/1")
     webhook_url = Column(String(500), nullable=True)
