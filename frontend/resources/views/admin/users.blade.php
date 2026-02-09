@@ -44,6 +44,43 @@
 @endsection
 
 @section('content')
+{{-- Create User Form --}}
+<div class="card section-gap">
+    <div class="card-header">
+        <div>
+            <div class="card-title">➕ Создать пользователя</div>
+            <div class="card-subtitle">Добавить нового пользователя в систему</div>
+        </div>
+    </div>
+    <div style="max-width:520px;">
+        <div class="grid-2">
+            <div class="form-group">
+                <label class="form-label">Имя пользователя *</label>
+                <input class="form-input" id="new-user-username" placeholder="username" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email *</label>
+                <input class="form-input" id="new-user-email" type="email" placeholder="user@example.com" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Пароль *</label>
+                <input class="form-input" id="new-user-password" type="password" placeholder="Минимум 6 символов" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Роль</label>
+                <select class="form-input" id="new-user-role">
+                    <option value="viewer">viewer — Наблюдатель</option>
+                    <option value="operator">operator — Оператор</option>
+                    <option value="manager">manager — Менеджер</option>
+                    <option value="admin">admin — Администратор</option>
+                </select>
+            </div>
+        </div>
+        <button class="btn btn-primary" onclick="createUser()">💾 Создать пользователя</button>
+        <div id="create-user-result" style="margin-top:12px;"></div>
+    </div>
+</div>
+
 <div class="card section-gap">
     <div class="card-header">
         <div>
@@ -123,6 +160,23 @@ async function apiPut(url, body = {}) {
     return { status: res.status, data: await res.json() };
 }
 
+async function apiPost(url, body = {}) {
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken, 'X-Requested-With': 'XMLHttpRequest' },
+        body: JSON.stringify(body),
+    });
+    return { status: res.status, data: await res.json() };
+}
+
+async function apiDelete(url) {
+    const res = await fetch(url, {
+        method: 'DELETE',
+        headers: { 'X-CSRF-TOKEN': csrfToken, 'X-Requested-With': 'XMLHttpRequest' },
+    });
+    return { status: res.status, data: await res.json() };
+}
+
 function escapeHtml(str) {
     if (!str) return '';
     const div = document.createElement('div');
@@ -171,13 +225,14 @@ async function loadUsers() {
                     '</div>' +
                 '</div>' +
                 '<div class="user-meta">' +
-                    '<span class="badge ' + (u.is_active ? 'badge-success' : 'badge-danger') + '">' + (u.is_active ? 'Активен' : 'Неактивен') + '</span>' +
+                    '<span class="badge ' + (u.is_active ? 'badge-success' : 'badge-danger') + '" style="cursor:pointer;" onclick="toggleUserActive(' + u.id + ')" title="Нажмите для переключения">' + (u.is_active ? 'Активен' : 'Неактивен') + '</span>' +
                     '<select class="role-select" onchange="updateRole(' + u.id + ', this.value)" data-user-id="' + u.id + '">' +
                         '<option value="admin" ' + (u.role === 'admin' ? 'selected' : '') + '>admin</option>' +
                         '<option value="manager" ' + (u.role === 'manager' ? 'selected' : '') + '>manager</option>' +
                         '<option value="operator" ' + (u.role === 'operator' ? 'selected' : '') + '>operator</option>' +
                         '<option value="viewer" ' + (u.role === 'viewer' ? 'selected' : '') + '>viewer</option>' +
                     '</select>' +
+                    '<button class="btn btn-danger btn-sm" onclick="deleteUser(' + u.id + ', \'' + escapeHtml(u.username) + '\')" title="Удалить">🗑</button>' +
                 '</div>' +
             '</div>';
         });
@@ -192,6 +247,66 @@ async function updateRole(userId, newRole) {
             alert('Ошибка: ' + (result.data.detail || JSON.stringify(result.data)));
             loadUsers();
         }
+    } catch (err) {
+        alert('Ошибка: ' + err.message);
+        loadUsers();
+    }
+}
+
+async function createUser() {
+    const username = document.getElementById('new-user-username').value.trim();
+    const email = document.getElementById('new-user-email').value.trim();
+    const password = document.getElementById('new-user-password').value;
+    const role = document.getElementById('new-user-role').value;
+    const container = document.getElementById('create-user-result');
+
+    if (!username || !email || !password) {
+        container.innerHTML = '<div class="alert alert-danger">Заполните все обязательные поля</div>';
+        return;
+    }
+    if (password.length < 6) {
+        container.innerHTML = '<div class="alert alert-danger">Пароль должен содержать минимум 6 символов</div>';
+        return;
+    }
+
+    container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Создание...</div>';
+    try {
+        const result = await apiPost('/admin/api/users', { username, email, password, role, is_active: true });
+        if (result.status >= 400) {
+            container.innerHTML = '<div class="alert alert-danger">⚠️ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>';
+            return;
+        }
+        container.innerHTML = '<div class="alert alert-success">✅ Пользователь "' + escapeHtml(result.data.username) + '" создан с ролью ' + escapeHtml(result.data.role) + '</div>';
+        document.getElementById('new-user-username').value = '';
+        document.getElementById('new-user-email').value = '';
+        document.getElementById('new-user-password').value = '';
+        loadUsers();
+    } catch (err) {
+        container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>';
+    }
+}
+
+async function deleteUser(userId, username) {
+    if (!confirm('Удалить пользователя "' + username + '"? Это действие необратимо.')) return;
+    try {
+        const result = await apiDelete('/admin/api/users/' + userId);
+        if (result.status >= 400) {
+            alert('Ошибка: ' + (result.data.detail || JSON.stringify(result.data)));
+        }
+        loadUsers();
+    } catch (err) {
+        alert('Ошибка: ' + err.message);
+        loadUsers();
+    }
+}
+
+async function toggleUserActive(userId) {
+    try {
+        const result = await apiPut('/admin/api/users/' + userId + '/toggle-active');
+        if (result.status >= 400) {
+            alert('Ошибка: ' + (result.data.detail || JSON.stringify(result.data)));
+        }
+        loadUsers();
     } catch (err) {
         alert('Ошибка: ' + err.message);
         loadUsers();

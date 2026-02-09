@@ -118,7 +118,8 @@ class IikoService:
                     f"Текущий ключ (первые 8 символов): '{key[:8]}...'"
                 )
             raise
-        # iiko API may return token as plain text string or as JSON {"token": "..."}
+        # iiko API may return token as plain text string or as JSON
+        # Documented response: {"correlationId": "...", "token": "..."}
         if isinstance(result, str):
             # Plain text response; strip whitespace and surrounding quotes
             # (iiko may return a bare JSON string like "token-value")
@@ -127,7 +128,8 @@ class IikoService:
                 token_str = token_str[1:-1]
             self._token = token_str
         elif isinstance(result, dict):
-            # JSON response: try "token" (documented) or "access_token" (compatibility)
+            # JSON response: try "token" (documented), "correlationId" response format,
+            # or "access_token" (compatibility)
             self._token = result.get("token") or result.get("access_token") or ""
         else:
             self._token = str(result).strip()
@@ -281,6 +283,136 @@ class IikoService:
             "POST",
             "/webhooks/settings",
             json_data={"organizationId": organization_id},
+        )
+
+    # ─── Loyalty / iikoCard ─────────────────────────────────────────────────
+    async def get_loyalty_programs(self, organization_ids: list) -> dict:
+        """Получить список программ лояльности (бонусных программ)"""
+        if not self._token:
+            await self.authenticate()
+        return await self._request(
+            "POST",
+            "/loyalty/iiko/program",
+            json_data={"organizationIds": organization_ids},
+        )
+
+    async def get_customer_info(self, organization_id: str, customer_id: str = None,
+                                phone: str = None, card_track: str = None,
+                                card_number: str = None, email: str = None) -> dict:
+        """Получить информацию о госте (клиенте) программы лояльности"""
+        if not self._token:
+            await self.authenticate()
+        payload = {"organizationId": organization_id, "type": "phone"}
+        if customer_id:
+            payload["id"] = customer_id
+            payload["type"] = "id"
+        elif phone:
+            payload["phone"] = phone
+            payload["type"] = "phone"
+        elif card_track:
+            payload["cardTrack"] = card_track
+            payload["type"] = "cardTrack"
+        elif card_number:
+            payload["cardNumber"] = card_number
+            payload["type"] = "cardNumber"
+        elif email:
+            payload["email"] = email
+            payload["type"] = "email"
+        return await self._request(
+            "POST",
+            "/loyalty/iiko/customer/info",
+            json_data=payload,
+        )
+
+    async def create_or_update_customer(self, organization_id: str,
+                                        name: str = None, phone: str = None,
+                                        email: str = None, card_track: str = None,
+                                        card_number: str = None,
+                                        birthday: str = None) -> dict:
+        """Создать или обновить гостя в программе лояльности"""
+        if not self._token:
+            await self.authenticate()
+        customer = {}
+        if name:
+            customer["name"] = name
+        if phone:
+            customer["phone"] = phone
+        if email:
+            customer["email"] = email
+        if card_track:
+            customer["cardTrack"] = card_track
+        if card_number:
+            customer["cardNumber"] = card_number
+        if birthday:
+            customer["birthday"] = birthday
+        return await self._request(
+            "POST",
+            "/loyalty/iiko/customer/create_or_update",
+            json_data={"organizationId": organization_id, **customer},
+        )
+
+    async def get_customer_balance(self, organization_id: str, customer_id: str) -> dict:
+        """Получить баланс бонусов гостя"""
+        if not self._token:
+            await self.authenticate()
+        return await self._request(
+            "POST",
+            "/loyalty/iiko/customer/wallet/balances",
+            json_data={"organizationId": organization_id, "customerId": customer_id},
+        )
+
+    async def hold_loyalty_balance(self, organization_id: str, customer_id: str,
+                                   wallet_id: str, amount: float,
+                                   transaction_comment: str = "") -> dict:
+        """Холдировать (заморозить) бонусы гостя"""
+        if not self._token:
+            await self.authenticate()
+        return await self._request(
+            "POST",
+            "/loyalty/iiko/customer/wallet/hold",
+            json_data={
+                "organizationId": organization_id,
+                "customerId": customer_id,
+                "walletId": wallet_id,
+                "amount": amount,
+                "comment": transaction_comment,
+            },
+        )
+
+    async def topup_loyalty_balance(self, organization_id: str, customer_id: str,
+                                    wallet_id: str, amount: float,
+                                    transaction_comment: str = "") -> dict:
+        """Пополнить бонусный баланс гостя"""
+        if not self._token:
+            await self.authenticate()
+        return await self._request(
+            "POST",
+            "/loyalty/iiko/customer/wallet/topup",
+            json_data={
+                "organizationId": organization_id,
+                "customerId": customer_id,
+                "walletId": wallet_id,
+                "amount": amount,
+                "comment": transaction_comment,
+            },
+        )
+
+    async def withdraw_loyalty_balance(self, organization_id: str, customer_id: str,
+                                       wallet_id: str, amount: float,
+                                       transaction_comment: str = "") -> dict:
+        """Списать бонусы с баланса гостя"""
+        if not self._token:
+            await self.authenticate()
+        return await self._request(
+            "POST",
+            "/loyalty/iiko/customer/wallet/withdraw",
+            json_data={
+                "organizationId": organization_id,
+                "customerId": customer_id,
+                "walletId": wallet_id,
+                "amount": amount,
+                "comment": transaction_comment,
+            },
         )
 
     async def get_deliveries_by_statuses(self, organization_id: str, statuses: list) -> dict:
