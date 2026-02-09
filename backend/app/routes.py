@@ -34,6 +34,11 @@ _app_start_time = time.time()
 
 api_router = APIRouter()
 
+# Константы для типов событий вебхуков iiko
+WEBHOOK_EVENT_ORDER_CHANGED = "OrderChanged"
+WEBHOOK_EVENT_DELIVERY_ORDER_CHANGED = "DeliveryOrderChanged"
+WEBHOOK_EVENT_ORDER = "order"
+
 
 # ─── Auth ────────────────────────────────────────────────────────────────
 @api_router.post("/auth/register", tags=["auth"], response_model=UserResponse)
@@ -1017,3 +1022,84 @@ async def admin_toggle_user_active(
     db.commit()
     db.refresh(user)
     return {"detail": f"Пользователь {'активирован' if user.is_active else 'деактивирован'}", "is_active": user.is_active}
+
+
+# ─── Webhook ────────────────────────────────────────────────────────────
+@api_router.post("/webhook/iiko", tags=["webhook"])
+async def iiko_webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Webhook endpoint для получения событий от iiko.
+    Принимает данные от iiko, проверяет секретный ключ и логирует события.
+    """
+    # Получаем секретный ключ из заголовков
+    auth_token = request.headers.get("Authorization") or request.headers.get("authToken")
+    
+    # Проверяем секретный ключ
+    expected_secret = settings.WEBHOOK_SECRET_KEY
+    if not expected_secret:
+        logger.error("WEBHOOK_SECRET_KEY не настроен в переменных окружения")
+        raise HTTPException(
+            status_code=500,
+            detail="Server configuration error: webhook secret not configured"
+        )
+    
+    if auth_token != expected_secret:
+        logger.warning(f"Неверный секретный ключ вебхука: {auth_token}")
+        raise HTTPException(status_code=401, detail="Unauthorized: неверный секретный ключ")
+    
+    # Получаем данные от iiko
+    try:
+        payload = await request.json()
+    except Exception as e:
+        logger.error(f"Ошибка парсинга JSON от iiko webhook: {e}")
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+    
+    # Определяем тип события
+    event_type = payload.get("eventType") or payload.get("type") or "unknown"
+    
+    # Логируем событие
+    logger.info(f"Получено событие от iiko webhook: {event_type}")
+    logger.debug(f"Данные события: {json.dumps(payload, ensure_ascii=False)[:500]}")
+    
+    # Сохраняем событие в БД
+    webhook_event = WebhookEvent(
+        event_type=event_type,
+        payload=json.dumps(payload, ensure_ascii=False),
+        processed=False,
+    )
+    db.add(webhook_event)
+    
+    # Обрабатываем событие заказа
+    if event_type in [WEBHOOK_EVENT_ORDER_CHANGED, WEBHOOK_EVENT_DELIVERY_ORDER_CHANGED, WEBHOOK_EVENT_ORDER]:
+        try:
+            # Извлекаем информацию о заказе
+            order_data = payload.get("order") or payload.get("data") or {}
+            order_id = order_data.get("id") or order_data.get("orderId")
+            order_status = order_data.get("status") or order_data.get("orderStatus")
+            
+            logger.info(f"Статус заказа {order_id}: {order_status}")
+            
+            # Обновляем статус заказа в БД, если заказ существует
+            if order_id:
+                existing_order = db.query(Order).filter(Order.iiko_order_id == order_id).first()
+                if existing_order:
+                    existing_order.status = order_status or "unknown"
+                    existing_order.order_data = json.dumps(order_data, ensure_ascii=False)
+                    logger.info(f"Обновлен статус заказа в БД: {order_id} -> {order_status}")
+                else:
+                    logger.info(f"Заказ {order_id} не найден в БД, событие просто залогировано")
+            
+            # Помечаем событие как обработанное
+            webhook_event.processed = True
+            
+        except Exception as e:
+            logger.error(f"Ошибка при обработке события заказа: {e}")
+    
+    # Сохраняем изменения
+    db.commit()
+    
+    # Возвращаем успешный ответ
+    return {"status": "ok", "message": "Событие получено и обработано"}

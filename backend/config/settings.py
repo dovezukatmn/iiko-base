@@ -37,6 +37,7 @@ class Settings(BaseSettings):
 
     # Webhook
     WEBHOOK_BASE_URL: str = ""
+    WEBHOOK_SECRET_KEY: str = ""
     
     # Server
     HOST: str = "0.0.0.0"
