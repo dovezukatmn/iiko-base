@@ -265,9 +265,15 @@ async def test_iiko_connection(
     try:
         svc = IikoService(db, rec)
         token = await svc.authenticate()
-        return {"status": "ok", "message": "Подключение успешно"}
+        return {"status": "ok", "message": "Подключение успешно! Токен получен."}
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Ошибка подключения: {str(e)}")
+        error_msg = str(e)
+        if "401" in error_msg:
+            raise HTTPException(
+                status_code=502,
+                detail="Неверный API ключ (apiLogin). Проверьте правильность ключа в настройках iiko Cloud."
+            )
+        raise HTTPException(status_code=502, detail=f"Ошибка подключения к iiko API: {error_msg}")
 
 
 # ─── iiko Data ───────────────────────────────────────────────────────────
