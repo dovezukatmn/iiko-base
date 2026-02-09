@@ -184,7 +184,7 @@
             <div class="card-header">
                 <div>
                     <div class="card-title">Настройка вебхука</div>
-                    <div class="card-subtitle">Автоматическая привязка вебхука в iiko</div>
+                    <div class="card-subtitle">Введите домен — URL и токен создадутся автоматически</div>
                 </div>
             </div>
             <div class="settings-form">
@@ -195,14 +195,21 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">URL вебхука</label>
-                    <input type="text" class="form-input" id="webhook-url-input" placeholder="https://yourdomain.com/api/v1/webhooks/iiko">
+                    <label class="form-label">Домен вашего сервера</label>
+                    <input type="text" class="form-input" id="webhook-domain-input" placeholder="example.com">
+                    <div style="font-size:11px;color:var(--muted);margin-top:4px;">
+                        Введите только домен (например: vezuroll.ru). URL вебхука и токен авторизации будут сгенерированы автоматически.
+                    </div>
                 </div>
                 <button class="btn btn-primary" onclick="registerWebhook()">🔗 Привязать вебхук</button>
                 <div id="webhook-result" style="margin-top:12px;display:none;">
                     <div class="webhook-result">
                         <div style="margin-bottom:8px;">
-                            <span class="form-label">Токен авторизации вебхука:</span>
+                            <span class="form-label">URL вебхука (создан автоматически):</span>
+                        </div>
+                        <div class="mono" id="webhook-generated-url" style="color:var(--accent);word-break:break-all;margin-bottom:10px;"></div>
+                        <div style="margin-bottom:8px;">
+                            <span class="form-label">Токен авторизации вебхука (создан автоматически):</span>
                         </div>
                         <div class="mono" id="webhook-auth-token" style="color:var(--accent-2);word-break:break-all;"></div>
                         <div style="margin-top:8px;">
@@ -614,7 +621,7 @@ async function testConnection() {
 // ─── Webhooks Tab ────────────────────────────────────────
 async function registerWebhook() {
     const settingId = document.getElementById('webhook-setting-select').value;
-    const webhookUrl = document.getElementById('webhook-url-input').value.trim();
+    const domain = document.getElementById('webhook-domain-input').value.trim();
     const errorEl = document.getElementById('webhook-error');
     const resultEl = document.getElementById('webhook-result');
 
@@ -622,18 +629,18 @@ async function registerWebhook() {
         errorEl.innerHTML = '<div class="alert alert-warning">⚠️ Выберите настройку iiko</div>';
         return;
     }
-    if (!webhookUrl) {
-        errorEl.innerHTML = '<div class="alert alert-warning">⚠️ Введите URL вебхука</div>';
+    if (!domain) {
+        errorEl.innerHTML = '<div class="alert alert-warning">⚠️ Введите домен вашего сервера (например: vezuroll.ru)</div>';
         return;
     }
 
-    errorEl.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Регистрация вебхука...</div>';
+    errorEl.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Регистрация вебхука в iiko Cloud...</div>';
     resultEl.style.display = 'none';
 
     try {
         const result = await apiPost('/admin/api/iiko-register-webhook', {
             setting_id: settingId,
-            webhook_url: webhookUrl,
+            domain: domain,
         });
 
         if (result.status >= 400) {
@@ -641,6 +648,7 @@ async function registerWebhook() {
         } else {
             errorEl.innerHTML = '';
             resultEl.style.display = 'block';
+            document.getElementById('webhook-generated-url').textContent = result.data.webhook_url || '—';
             document.getElementById('webhook-auth-token').textContent = result.data.auth_token || '—';
         }
     } catch (err) {

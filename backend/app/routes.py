@@ -417,6 +417,18 @@ async def get_order(
 @api_router.post("/webhooks/iiko", tags=["webhooks"])
 async def iiko_webhook(request: Request, db: Session = Depends(get_db)):
     """Прием вебхуков от iiko"""
+    # Проверка токена авторизации вебхука (защита от поддельных запросов)
+    auth_header = request.headers.get("Authorization", "")
+    stored_secrets = [
+        s.webhook_secret
+        for s in db.query(IikoSettings).filter(IikoSettings.webhook_secret.isnot(None)).all()
+    ]
+    if stored_secrets:
+        token_valid = any(secrets.compare_digest(auth_header, s) for s in stored_secrets)
+        if not auth_header or not token_valid:
+            logger.warning("Webhook rejected: invalid auth token")
+            raise HTTPException(status_code=401, detail="Invalid webhook auth token")
+
     body = await request.body()
     try:
         payload = json.loads(body)
@@ -609,11 +621,16 @@ async def get_iiko_discount_types(
 @api_router.post("/iiko/register-webhook", tags=["iiko"])
 async def register_iiko_webhook(
     setting_id: int,
+    domain: str = None,
     webhook_url: str = None,
     db: Session = Depends(get_db),
     _current_user: User = Depends(require_role("admin")),
 ):
-    """Зарегистрировать вебхук в iiko и сохранить настройки"""
+    """Зарегистрировать вебхук в iiko и сохранить настройки.
+
+    Принимает домен (например, example.com) и автоматически формирует
+    URL вебхука и токен авторизации, затем регистрирует их в iiko Cloud.
+    """
     rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
     if not rec:
         raise HTTPException(status_code=404, detail="Настройка не найдена")
@@ -621,13 +638,21 @@ async def register_iiko_webhook(
     if not rec.organization_id:
         raise HTTPException(status_code=400, detail="organization_id не задан в настройках iiko")
 
-    # Автоматически генерировать URL вебхука, если не указан
-    if not webhook_url:
+    # Автоматически формировать URL вебхука из домена
+    if domain:
+        domain = domain.strip().rstrip("/")
+        # Убрать протокол, если пользователь его добавил
+        if domain.startswith("http://") or domain.startswith("https://"):
+            domain = domain.split("://", 1)[1]
+        webhook_url = f"https://{domain}{settings.API_V1_PREFIX}/webhooks/iiko"
+    elif not webhook_url:
         if not settings.WEBHOOK_BASE_URL:
-            raise HTTPException(status_code=400, detail="Не указан webhook_url и не задан WEBHOOK_BASE_URL")
+            raise HTTPException(status_code=400, detail="Не указан домен и не задан WEBHOOK_BASE_URL")
         webhook_url = f"{settings.WEBHOOK_BASE_URL.rstrip('/')}{settings.API_V1_PREFIX}/webhooks/iiko"
 
+    # Автоматически генерировать токен авторизации для проверки входящих вебхуков
     auth_token = secrets.token_urlsafe(32)
+
     svc = IikoService(db, rec)
     try:
         result = await svc.register_webhook(rec.organization_id, webhook_url, auth_token)
