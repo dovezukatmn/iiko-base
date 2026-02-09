@@ -48,7 +48,7 @@ EOF
 - ✅ Eliminates SQL syntax errors
 - ✅ Proper SQL injection protection with escaped variables
 - ✅ Single quotes in usernames/emails are properly escaped
-- ✅ Dollar signs in password hashes are properly escaped
+- ✅ Dollar signs in password hashes don't need escaping (protected by single quotes)
 - ✅ Cleaner, more readable code
 - ✅ Consistent with PostgreSQL best practices
 

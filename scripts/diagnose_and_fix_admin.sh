@@ -37,7 +37,7 @@ EXPECTED_HASH='$2b$12$y4QVNPhuZfpLp1.xM6.NSeDnpD6I/wm.dSOXGrxV.HtXj6izHJLPa'
 # Replace ' with '' (SQL standard escaping)
 ADMIN_USERNAME_ESCAPED="${ADMIN_USERNAME//\'/\'\'}"
 ADMIN_EMAIL_ESCAPED="${ADMIN_EMAIL//\'/\'\'}"
-EXPECTED_HASH_ESCAPED="${EXPECTED_HASH//\$/\\$}"
+# No escaping needed for EXPECTED_HASH as it's within single quotes in psql
 
 # Security warning if using default passwords
 if [ "$DB_PASSWORD" = "12101991Qq!" ] || [ "$ADMIN_PASSWORD" = "12101991Qq!" ]; then
@@ -150,7 +150,7 @@ else
     PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" <<EOF
 \set username '$ADMIN_USERNAME_ESCAPED'
 \set email '$ADMIN_EMAIL_ESCAPED'
-\set hash '$EXPECTED_HASH_ESCAPED'
+\set hash '$EXPECTED_HASH'
 INSERT INTO users (username, email, hashed_password, role, is_active, is_superuser, created_at)
 VALUES (:'username', :'email', :'hash', 'admin', TRUE, TRUE, NOW())
 ON CONFLICT (username) DO NOTHING;
@@ -218,7 +218,7 @@ EOF
         echo "  Fixing hash..."
         
         PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" <<EOF
-\set hash '$EXPECTED_HASH_ESCAPED'
+\set hash '$EXPECTED_HASH'
 \set username '$ADMIN_USERNAME_ESCAPED'
 UPDATE users SET hashed_password = :'hash' WHERE username = :'username';
 EOF
@@ -237,7 +237,7 @@ EOF
         echo "  Resetting to default password..."
         
         PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" <<EOF
-\set hash '$EXPECTED_HASH_ESCAPED'
+\set hash '$EXPECTED_HASH'
 \set username '$ADMIN_USERNAME_ESCAPED'
 UPDATE users SET hashed_password = :'hash' WHERE username = :'username';
 EOF
