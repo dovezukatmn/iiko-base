@@ -17,12 +17,15 @@ psql -v username="$ADMIN_USERNAME" -tAc \
 ```
 
 ## Solution
-Changed to use heredoc syntax with psql's `\set` meta-command, which properly supports the `:'variable'` quoting syntax.
+Changed to use heredoc syntax with psql's `\set` meta-command, which properly supports the `:'variable'` quoting syntax. Additionally, added proper escaping of shell variables before passing them to psql.
 
 **Correct syntax:**
 ```bash
+# Escape single quotes and special characters
+ADMIN_USERNAME_ESCAPED="${ADMIN_USERNAME//\'/\'\'}"
+
 psql -tA <<EOF
-\set username '$ADMIN_USERNAME'
+\set username '$ADMIN_USERNAME_ESCAPED'
 SELECT EXISTS (SELECT 1 FROM users WHERE username = :'username');
 EOF
 ```
@@ -43,7 +46,9 @@ EOF
 
 ## Benefits
 - ✅ Eliminates SQL syntax errors
-- ✅ Maintains SQL injection protection
+- ✅ Proper SQL injection protection with escaped variables
+- ✅ Single quotes in usernames/emails are properly escaped
+- ✅ Dollar signs in password hashes are properly escaped
 - ✅ Cleaner, more readable code
 - ✅ Consistent with PostgreSQL best practices
 

@@ -33,6 +33,12 @@ ADMIN_EMAIL="${ADMIN_EMAIL:-admin@example.com}"
 # Correct hash for password "12101991Qq!"
 EXPECTED_HASH='$2b$12$y4QVNPhuZfpLp1.xM6.NSeDnpD6I/wm.dSOXGrxV.HtXj6izHJLPa'
 
+# Escape single quotes in variables for safe use in psql \set commands
+# Replace ' with '' (SQL standard escaping)
+ADMIN_USERNAME_ESCAPED="${ADMIN_USERNAME//\'/\'\'}"
+ADMIN_EMAIL_ESCAPED="${ADMIN_EMAIL//\'/\'\'}"
+EXPECTED_HASH_ESCAPED="${EXPECTED_HASH//\$/\\$}"
+
 # Security warning if using default passwords
 if [ "$DB_PASSWORD" = "12101991Qq!" ] || [ "$ADMIN_PASSWORD" = "12101991Qq!" ]; then
     echo -e "${RED}⚠️  WARNING: Using default passwords!${NC}"
@@ -122,7 +128,7 @@ echo ""
 # Test 5: Check if admin user exists
 echo -e "${YELLOW}[5/10] Checking admin user...${NC}"
 ADMIN_EXISTS=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -tA <<EOF
-\set username '$ADMIN_USERNAME'
+\set username '$ADMIN_USERNAME_ESCAPED'
 SELECT EXISTS (SELECT 1 FROM users WHERE username = :'username');
 EOF
 )
@@ -131,7 +137,7 @@ if [ "$ADMIN_EXISTS" = "t" ]; then
     
     # Get admin details
     ADMIN_INFO=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -tA <<EOF
-\set username '$ADMIN_USERNAME'
+\set username '$ADMIN_USERNAME_ESCAPED'
 SELECT id, username, email, role, is_active, is_superuser FROM users WHERE username = :'username';
 EOF
 )
@@ -142,9 +148,9 @@ else
     
     # Create admin user with parameterized query
     PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" <<EOF
-\set username '$ADMIN_USERNAME'
-\set email '$ADMIN_EMAIL'
-\set hash '$EXPECTED_HASH'
+\set username '$ADMIN_USERNAME_ESCAPED'
+\set email '$ADMIN_EMAIL_ESCAPED'
+\set hash '$EXPECTED_HASH_ESCAPED'
 INSERT INTO users (username, email, hashed_password, role, is_active, is_superuser, created_at)
 VALUES (:'username', :'email', :'hash', 'admin', TRUE, TRUE, NOW())
 ON CONFLICT (username) DO NOTHING;
@@ -164,7 +170,7 @@ echo ""
 echo -e "${YELLOW}[6/10] Checking admin is active...${NC}"
 if [ "$ADMIN_EXISTS" = "t" ]; then
     IS_ACTIVE=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -tA <<EOF
-\set username '$ADMIN_USERNAME'
+\set username '$ADMIN_USERNAME_ESCAPED'
 SELECT is_active FROM users WHERE username = :'username';
 EOF
 )
@@ -175,7 +181,7 @@ EOF
         echo "  Activating admin user..."
         
         PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" <<EOF
-\set username '$ADMIN_USERNAME'
+\set username '$ADMIN_USERNAME_ESCAPED'
 UPDATE users SET is_active = TRUE WHERE username = :'username';
 EOF
         
@@ -194,7 +200,7 @@ echo ""
 echo -e "${YELLOW}[7/10] Verifying password hash...${NC}"
 if [ "$ADMIN_EXISTS" = "t" ]; then
     CURRENT_HASH=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -tA <<EOF
-\set username '$ADMIN_USERNAME'
+\set username '$ADMIN_USERNAME_ESCAPED'
 SELECT hashed_password FROM users WHERE username = :'username';
 EOF
 )
@@ -212,8 +218,8 @@ EOF
         echo "  Fixing hash..."
         
         PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" <<EOF
-\set hash '$EXPECTED_HASH'
-\set username '$ADMIN_USERNAME'
+\set hash '$EXPECTED_HASH_ESCAPED'
+\set username '$ADMIN_USERNAME_ESCAPED'
 UPDATE users SET hashed_password = :'hash' WHERE username = :'username';
 EOF
         
@@ -231,8 +237,8 @@ EOF
         echo "  Resetting to default password..."
         
         PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" <<EOF
-\set hash '$EXPECTED_HASH'
-\set username '$ADMIN_USERNAME'
+\set hash '$EXPECTED_HASH_ESCAPED'
+\set username '$ADMIN_USERNAME_ESCAPED'
 UPDATE users SET hashed_password = :'hash' WHERE username = :'username';
 EOF
         
