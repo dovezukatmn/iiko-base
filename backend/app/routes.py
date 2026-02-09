@@ -275,12 +275,82 @@ async def test_iiko_connection(
         raise
     except Exception as e:
         error_msg = str(e)
-        if "401" in error_msg:
-            raise HTTPException(
-                status_code=502,
-                detail="Неверный API ключ (apiLogin). Проверьте правильность ключа в настройках iiko Cloud."
-            )
         raise HTTPException(status_code=502, detail=f"Ошибка подключения к iiko API: {error_msg}")
+
+
+@api_router.post("/iiko/diagnose", tags=["iiko"])
+async def diagnose_iiko_connection(
+    setting_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("admin")),
+):
+    """Диагностика подключения к iiko API — пошаговая проверка настроек и соединения"""
+    checks = []
+
+    # 1. Check that the settings record exists
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        return {"status": "error", "checks": [{"step": "settings", "ok": False, "detail": "Настройка с данным ID не найдена"}]}
+    checks.append({"step": "settings_found", "ok": True, "detail": f"Настройка id={setting_id} найдена"})
+
+    # 2. Validate API URL
+    api_url = (rec.api_url or "").strip()
+    if not api_url:
+        checks.append({"step": "api_url", "ok": False, "detail": "api_url не задан"})
+        return {"status": "error", "checks": checks}
+    if not api_url.startswith("https://"):
+        checks.append({"step": "api_url", "ok": False, "detail": f"api_url должен начинаться с https:// (текущий: {api_url})"})
+        return {"status": "error", "checks": checks}
+    checks.append({"step": "api_url", "ok": True, "detail": f"api_url = {api_url}"})
+
+    # 3. Validate API key format
+    api_key = (rec.api_key or "").strip()
+    if not api_key:
+        checks.append({"step": "api_key_format", "ok": False, "detail": "api_key (apiLogin) пуст. Укажите ключ API."})
+        return {"status": "error", "checks": checks}
+    if len(api_key) < 10:
+        checks.append({"step": "api_key_format", "ok": False, "detail": f"api_key слишком короткий ({len(api_key)} символов). Обычно ключ iiko содержит 30+ символов."})
+        return {"status": "error", "checks": checks}
+    if api_key != rec.api_key:
+        checks.append({"step": "api_key_format", "ok": False, "detail": "api_key содержит лишние пробелы в начале/конце. Они будут удалены при отправке."})
+    checks.append({"step": "api_key_format", "ok": True, "detail": f"api_key задан ({len(api_key)} символов, начинается с '{api_key[:4]}...')"})
+
+    # 4. Network connectivity check
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            probe = await client.get(api_url.rstrip("/"))
+        checks.append({"step": "network", "ok": True, "detail": f"Сервер {api_url} доступен (HTTP {probe.status_code})"})
+    except httpx.TimeoutException:
+        checks.append({"step": "network", "ok": False, "detail": f"Тайм-аут подключения к {api_url}. Проверьте сеть и DNS."})
+        return {"status": "error", "checks": checks}
+    except Exception as e:
+        checks.append({"step": "network", "ok": False, "detail": f"Не удалось подключиться к {api_url}: {e}"})
+        return {"status": "error", "checks": checks}
+
+    # 5. Authentication attempt
+    try:
+        svc = IikoService(db, rec)
+        token = await svc.authenticate()
+        if token:
+            checks.append({"step": "auth", "ok": True, "detail": "Аутентификация успешна! Токен получен."})
+        else:
+            checks.append({"step": "auth", "ok": False, "detail": "iiko API вернул пустой токен. Проверьте ключ в личном кабинете iiko."})
+            return {"status": "error", "checks": checks}
+    except Exception as e:
+        checks.append({"step": "auth", "ok": False, "detail": f"Ошибка аутентификации: {e}"})
+        return {"status": "error", "checks": checks}
+
+    # 6. Try fetching organizations (quick API sanity check)
+    try:
+        orgs = await svc.get_organizations()
+        org_list = orgs.get("organizations", [])
+        checks.append({"step": "organizations", "ok": True, "detail": f"Получено организаций: {len(org_list)}"})
+    except Exception as e:
+        checks.append({"step": "organizations", "ok": False, "detail": f"Ошибка получения организаций: {e}"})
+
+    all_ok = all(c["ok"] for c in checks)
+    return {"status": "ok" if all_ok else "warning", "checks": checks}
 
 
 # ─── iiko Data ───────────────────────────────────────────────────────────

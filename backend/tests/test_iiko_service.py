@@ -215,3 +215,31 @@ async def test_request_retries_on_401(mock_db, mock_settings):
         assert result == {"couriers": []}
         assert svc._token == "new-token"
         assert mock_client.request.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_authenticate_empty_api_key_raises(mock_db, mock_settings):
+    """authenticate() должен выбрасывать ошибку если API ключ пуст"""
+    mock_settings.api_key = "   "
+    svc = IikoService(mock_db, mock_settings)
+    with pytest.raises(Exception, match="API ключ.*не задан"):
+        await svc.authenticate()
+
+
+@pytest.mark.asyncio
+async def test_authenticate_401_gives_helpful_message(mock_db, mock_settings):
+    """authenticate() должен давать понятное сообщение при 401 от iiko"""
+    svc = IikoService(mock_db, mock_settings)
+    mock_response = MagicMock()
+    mock_response.status_code = 401
+    mock_response.text = "Unauthorized"
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.request = AsyncMock(return_value=mock_response)
+        mock_client_cls.return_value = mock_client
+
+        with pytest.raises(Exception, match="Неверный API ключ"):
+            await svc.authenticate()
