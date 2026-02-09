@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql import func as sa_func
 from database.models import ApiLog, IikoSettings
 from config.settings import settings
+from app.iiko_auth import get_access_token
 
 MAX_LOG_BODY_LENGTH = 2000
 MIN_API_KEY_LENGTH = 16  # iiko API keys are typically 32 characters, but allow shorter for flexibility
@@ -88,78 +89,94 @@ class IikoService:
             return resp_text
 
     async def authenticate(self, api_key: Optional[str] = None) -> str:
-        """Получить токен доступа iiko (токен живет ~15 минут)"""
-        key = api_key or (self.iiko_settings.api_key if self.iiko_settings else settings.IIKO_API_KEY)
-        key = key.strip()
-        if not key:
-            raise Exception(
-                "API ключ (apiLogin) не задан. Укажите его в настройках iiko "
-                "(переменная IIKO_API_KEY или через панель администратора)."
-            )
-        
-        # Validate API key format (iiko API keys are typically 32 hex characters)
-        if len(key) < MIN_API_KEY_LENGTH:
-            raise Exception(
-                f"API ключ слишком короткий ({len(key)} символов). "
-                f"Минимальная длина: {MIN_API_KEY_LENGTH}, стандартная длина: 32 символа. "
-                f"Проверьте, что ключ скопирован полностью."
-            )
-        
+        """
+        Получить токен доступа iiko (токен живет ~15 минут).
+        Теперь использует централизованное управление токенами из iiko_auth.
+        """
         try:
-            result = await self._request("POST", "/access_token", json_data={"apiLogin": key}, _is_auth=True)
-        except httpx.TimeoutException:
-            raise Exception(
-                f"Тайм-аут подключения к iiko API ({self.base_url}). "
-                f"Проверьте доступность сервера iiko и сетевое подключение."
-            )
-        except httpx.ConnectError as e:
-            raise Exception(
-                f"Ошибка подключения к iiko API ({self.base_url}): {e}. "
-                f"Проверьте доступность сервера, URL и DNS-настройки."
-            )
+            # Используем централизованную функцию получения токена
+            self._token = await get_access_token()
+            
+            # Обновить время последнего обновления токена в БД
+            if self.iiko_settings:
+                self.iiko_settings.last_token_refresh = sa_func.now()
+                self.db.commit()
+            
+            return self._token
         except Exception as e:
-            error_msg = str(e)
-            if "401" in error_msg or "400" in error_msg:
+            # Если централизованное получение не удалось, пробуем локальный метод
+            # (для обратной совместимости)
+            key = api_key or (self.iiko_settings.api_key if self.iiko_settings else settings.IIKO_API_KEY)
+            key = key.strip()
+            if not key:
                 raise Exception(
-                    f"Неверный API ключ (apiLogin). Проверьте: "
-                    f"1) Ключ скопирован полностью, без лишних пробелов; "
-                    f"2) API-ключ активен в личном кабинете iiko Cloud (https://api-ru.iiko.services); "
-                    f"3) Ключ не был отозван или заменён; "
-                    f"4) Используйте новый формат ключа (из раздела 'API' в iiko Cloud). "
-                    f"Первые символы ключа: '{key[:min(8, len(key))]}...'"
+                    "API ключ (apiLogin) не задан. Укажите его в настройках iiko "
+                    "(переменная IIKO_API_KEY или через панель администратора)."
                 )
-            raise
-        # iiko API may return token as plain text string or as JSON
-        # Documented response: {"correlationId": "...", "token": "..."}
-        if isinstance(result, str):
-            # Plain text response; strip whitespace and surrounding quotes
-            # (iiko may return a bare JSON string like "token-value")
-            token_str = result.strip()
-            if len(token_str) >= 2 and token_str[0] == '"' and token_str[-1] == '"':
-                token_str = token_str[1:-1]
-            self._token = token_str
-        elif isinstance(result, dict):
-            # JSON response: try "token" (documented), "correlationId" response format,
-            # or "access_token" (compatibility)
-            self._token = result.get("token") or result.get("access_token") or ""
-        else:
-            self._token = str(result).strip()
-        
-        # Validate that we actually got a token
-        if not self._token:
-            raise Exception(
-                "iiko API вернул пустой токен. Это может быть связано с: "
-                "1) Неверным форматом ответа API; "
-                "2) Проблемами на стороне iiko Cloud; "
-                "3) Неправильной настройкой API ключа. "
-                "Попробуйте создать новый API ключ в личном кабинете iiko Cloud."
-            )
-        
-        # Обновить время последнего обновления токена в БД
-        if self.iiko_settings:
-            self.iiko_settings.last_token_refresh = sa_func.now()
-            self.db.commit()
-        return self._token
+            
+            # Validate API key format (iiko API keys are typically 32 hex characters)
+            if len(key) < MIN_API_KEY_LENGTH:
+                raise Exception(
+                    f"API ключ слишком короткий ({len(key)} символов). "
+                    f"Минимальная длина: {MIN_API_KEY_LENGTH}, стандартная длина: 32 символа. "
+                    f"Проверьте, что ключ скопирован полностью."
+                )
+            
+            try:
+                result = await self._request("POST", "/access_token", json_data={"apiLogin": key}, _is_auth=True)
+            except httpx.TimeoutException:
+                raise Exception(
+                    f"Тайм-аут подключения к iiko API ({self.base_url}). "
+                    f"Проверьте доступность сервера iiko и сетевое подключение."
+                )
+            except httpx.ConnectError as e:
+                raise Exception(
+                    f"Ошибка подключения к iiko API ({self.base_url}): {e}. "
+                    f"Проверьте доступность сервера, URL и DNS-настройки."
+                )
+            except Exception as e:
+                error_msg = str(e)
+                if "401" in error_msg or "400" in error_msg:
+                    raise Exception(
+                        f"Неверный API ключ (apiLogin). Проверьте: "
+                        f"1) Ключ скопирован полностью, без лишних пробелов; "
+                        f"2) API-ключ активен в личном кабинете iiko Cloud (https://api-ru.iiko.services); "
+                        f"3) Ключ не был отозван или заменён; "
+                        f"4) Используйте новый формат ключа (из раздела 'API' в iiko Cloud). "
+                        f"Первые символы ключа: '{key[:min(8, len(key))]}...'"
+                    )
+                raise
+            # iiko API may return token as plain text string or as JSON
+            # Documented response: {"correlationId": "...", "token": "..."}
+            if isinstance(result, str):
+                # Plain text response; strip whitespace and surrounding quotes
+                # (iiko may return a bare JSON string like "token-value")
+                token_str = result.strip()
+                if len(token_str) >= 2 and token_str[0] == '"' and token_str[-1] == '"':
+                    token_str = token_str[1:-1]
+                self._token = token_str
+            elif isinstance(result, dict):
+                # JSON response: try "token" (documented), "correlationId" response format,
+                # or "access_token" (compatibility)
+                self._token = result.get("token") or result.get("access_token") or ""
+            else:
+                self._token = str(result).strip()
+            
+            # Validate that we actually got a token
+            if not self._token:
+                raise Exception(
+                    "iiko API вернул пустой токен. Это может быть связано с: "
+                    "1) Неверным форматом ответа API; "
+                    "2) Проблемами на стороне iiko Cloud; "
+                    "3) Неправильной настройкой API ключа. "
+                    "Попробуйте создать новый API ключ в личном кабинете iiko Cloud."
+                )
+            
+            # Обновить время последнего обновления токена в БД
+            if self.iiko_settings:
+                self.iiko_settings.last_token_refresh = sa_func.now()
+                self.db.commit()
+            return self._token
 
     async def get_organizations(self) -> dict:
         """Получить список организаций"""
