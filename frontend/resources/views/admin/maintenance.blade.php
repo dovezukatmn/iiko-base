@@ -769,11 +769,18 @@ async function loadOrganizations() {
 
 function populateOrgSelect(sel, orgs) {
     const currentVal = sel.value;
-    sel.innerHTML = '<option value="">— Не выбрано —</option>';
+    sel.innerHTML = '';
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = '';
+    defaultOpt.textContent = '— Не выбрано —';
+    sel.appendChild(defaultOpt);
     orgs.forEach(org => {
         const id = org.id || '';
         const name = org.name || id;
-        sel.innerHTML += '<option value="' + escapeHtml(id) + '">' + escapeHtml(name) + ' (' + escapeHtml(id).substring(0, 8) + '...)</option>';
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = name + ' (' + id.substring(0, 8) + '...)';
+        sel.appendChild(opt);
     });
     // Restore previous selection if it still exists
     if (currentVal) {

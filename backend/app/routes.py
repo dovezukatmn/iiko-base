@@ -385,6 +385,9 @@ async def get_iiko_organizations_by_key(
     if not api_key:
         raise HTTPException(status_code=400, detail="API ключ (apiLogin) обязателен")
 
+    if not api_url.startswith("https://"):
+        raise HTTPException(status_code=400, detail="API URL должен начинаться с https://")
+
     # Create a temporary settings-like object for IikoService
     temp_settings = IikoSettings(
         api_key=api_key,
