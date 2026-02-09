@@ -33,6 +33,15 @@ ADMIN_EMAIL="${ADMIN_EMAIL:-admin@example.com}"
 # Correct hash for password "12101991Qq!"
 EXPECTED_HASH='$2b$12$y4QVNPhuZfpLp1.xM6.NSeDnpD6I/wm.dSOXGrxV.HtXj6izHJLPa'
 
+# Security warning if using default passwords
+if [ "$DB_PASSWORD" = "12101991Qq!" ] || [ "$ADMIN_PASSWORD" = "12101991Qq!" ]; then
+    echo -e "${RED}⚠️  WARNING: Using default passwords!${NC}"
+    echo -e "${RED}   For production, set secure passwords via environment variables:${NC}"
+    echo -e "${RED}   export DB_PASSWORD='your_secure_password'${NC}"
+    echo -e "${RED}   export ADMIN_PASSWORD='your_secure_password'${NC}"
+    echo ""
+fi
+
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}Admin Login Comprehensive Diagnostics${NC}"
 echo -e "${BLUE}========================================${NC}"
