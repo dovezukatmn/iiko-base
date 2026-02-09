@@ -17,7 +17,7 @@ def mock_db():
 @pytest.fixture
 def mock_settings():
     s = MagicMock()
-    s.api_key = "test-key"
+    s.api_key = "test-key-with-minimum-16-chars"
     s.api_url = "https://api-ru.iiko.services/api/1"
     return s
 

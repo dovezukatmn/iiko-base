@@ -3,7 +3,7 @@
 """
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 import httpx
 from config.settings import settings
@@ -36,7 +36,7 @@ async def get_access_token(force_refresh: bool = False) -> str:
     
     async with _token_lock:
         # Проверяем, нужно ли обновлять токен
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if not force_refresh and _access_token and _token_expires_at:
             if now < _token_expires_at:
                 logger.debug(f"Используем кешированный токен (истекает через {(_token_expires_at - now).seconds} секунд)")
