@@ -190,8 +190,8 @@ class AdminController extends Controller
     public function apiRegisterWebhook(Request $request): JsonResponse
     {
         $settingId = $request->input('setting_id');
-        $webhookUrl = $request->input('webhook_url');
-        return $this->proxyPost($request, "/iiko/register-webhook?setting_id={$settingId}&webhook_url=" . urlencode($webhookUrl));
+        $domain = $request->input('domain');
+        return $this->proxyPost($request, "/iiko/register-webhook?setting_id={$settingId}&domain=" . urlencode($domain));
     }
 
     public function apiWebhookEvents(Request $request): JsonResponse

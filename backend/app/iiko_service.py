@@ -6,6 +6,7 @@ import time
 from typing import Optional
 import httpx
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import func as sa_func
 from database.models import ApiLog, IikoSettings
 from config.settings import settings
 
@@ -68,10 +69,14 @@ class IikoService:
         return response.json() if resp_text else {}
 
     async def authenticate(self, api_key: Optional[str] = None) -> str:
-        """Получить токен доступа iiko"""
+        """Получить токен доступа iiko (токен живет ~15 минут)"""
         key = api_key or (self.iiko_settings.api_key if self.iiko_settings else settings.IIKO_API_KEY)
         result = await self._request("POST", "/access_token", json_data={"apiLogin": key})
         self._token = result.get("token", "")
+        # Обновить время последнего обновления токена в БД
+        if self.iiko_settings:
+            self.iiko_settings.last_token_refresh = sa_func.now()
+            self.db.commit()
         return self._token
 
     async def get_organizations(self) -> dict:
