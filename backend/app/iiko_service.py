@@ -11,6 +11,7 @@ from database.models import ApiLog, IikoSettings
 from config.settings import settings
 
 MAX_LOG_BODY_LENGTH = 2000
+MIN_API_KEY_LENGTH = 16  # iiko API keys are typically 32 characters, but allow shorter for flexibility
 
 
 class IikoService:
@@ -97,10 +98,10 @@ class IikoService:
             )
         
         # Validate API key format (iiko API keys are typically 32 hex characters)
-        if len(key) < 16:
+        if len(key) < MIN_API_KEY_LENGTH:
             raise Exception(
                 f"API ключ слишком короткий ({len(key)} символов). "
-                f"Стандартный ключ iiko содержит 32 символа. "
+                f"Минимальная длина: {MIN_API_KEY_LENGTH}, стандартная длина: 32 символа. "
                 f"Проверьте, что ключ скопирован полностью."
             )
         

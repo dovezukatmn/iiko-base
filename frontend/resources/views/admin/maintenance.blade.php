@@ -132,8 +132,8 @@
                     <label class="form-label">API ключ (apiLogin)</label>
                     <div style="position:relative;">
                         <input type="password" class="form-input" id="api-key-input" placeholder="Введите ваш iiko API логин" autocomplete="new-password" style="padding-right:40px;">
-                        <button type="button" onclick="toggleApiKeyVisibility()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;padding:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center;" title="Показать/скрыть">
-                            <span id="api-key-toggle-icon">👁</span>
+                        <button type="button" id="api-key-toggle-btn" onclick="toggleApiKeyVisibility()" aria-label="Показать API ключ" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;padding:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center;outline:2px solid transparent;outline-offset:2px;border-radius:4px;transition:outline 0.2s;" onfocus="this.style.outline='2px solid var(--accent)'" onblur="this.style.outline='2px solid transparent'">
+                            <span id="api-key-toggle-icon" aria-hidden="true">👁</span>
                         </button>
                     </div>
                     <div style="font-size:11px;color:var(--muted);margin-top:4px;">
@@ -1227,12 +1227,15 @@ async function createOrUpdateCustomer() {
 function toggleApiKeyVisibility() {
     const input = document.getElementById('api-key-input');
     const icon = document.getElementById('api-key-toggle-icon');
+    const button = document.getElementById('api-key-toggle-btn');
     if (input.type === 'password') {
         input.type = 'text';
         icon.textContent = '🙈';
+        button.setAttribute('aria-label', 'Скрыть API ключ');
     } else {
         input.type = 'password';
         icon.textContent = '👁';
+        button.setAttribute('aria-label', 'Показать API ключ');
     }
 }
 
