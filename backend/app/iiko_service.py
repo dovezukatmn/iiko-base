@@ -11,6 +11,7 @@ from database.models import ApiLog, IikoSettings
 from config.settings import settings
 
 MAX_LOG_BODY_LENGTH = 2000
+MIN_API_KEY_LENGTH = 16  # iiko API keys are typically 32 characters, but allow shorter for flexibility
 
 
 class IikoService:
@@ -95,6 +96,15 @@ class IikoService:
                 "API ключ (apiLogin) не задан. Укажите его в настройках iiko "
                 "(переменная IIKO_API_KEY или через панель администратора)."
             )
+        
+        # Validate API key format (iiko API keys are typically 32 hex characters)
+        if len(key) < MIN_API_KEY_LENGTH:
+            raise Exception(
+                f"API ключ слишком короткий ({len(key)} символов). "
+                f"Минимальная длина: {MIN_API_KEY_LENGTH}, стандартная длина: 32 символа. "
+                f"Проверьте, что ключ скопирован полностью."
+            )
+        
         try:
             result = await self._request("POST", "/access_token", json_data={"apiLogin": key}, _is_auth=True)
         except httpx.TimeoutException:
@@ -109,13 +119,14 @@ class IikoService:
             )
         except Exception as e:
             error_msg = str(e)
-            if "401" in error_msg:
+            if "401" in error_msg or "400" in error_msg:
                 raise Exception(
                     f"Неверный API ключ (apiLogin). Проверьте: "
                     f"1) Ключ скопирован полностью, без лишних пробелов; "
                     f"2) API-ключ активен в личном кабинете iiko Cloud (https://api-ru.iiko.services); "
-                    f"3) Ключ не был отозван или заменён. "
-                    f"Текущий ключ (первые 8 символов): '{key[:8]}...'"
+                    f"3) Ключ не был отозван или заменён; "
+                    f"4) Используйте новый формат ключа (из раздела 'API' в iiko Cloud). "
+                    f"Первые символы ключа: '{key[:min(8, len(key))]}...'"
                 )
             raise
         # iiko API may return token as plain text string or as JSON
@@ -133,6 +144,17 @@ class IikoService:
             self._token = result.get("token") or result.get("access_token") or ""
         else:
             self._token = str(result).strip()
+        
+        # Validate that we actually got a token
+        if not self._token:
+            raise Exception(
+                "iiko API вернул пустой токен. Это может быть связано с: "
+                "1) Неверным форматом ответа API; "
+                "2) Проблемами на стороне iiko Cloud; "
+                "3) Неправильной настройкой API ключа. "
+                "Попробуйте создать новый API ключ в личном кабинете iiko Cloud."
+            )
+        
         # Обновить время последнего обновления токена в БД
         if self.iiko_settings:
             self.iiko_settings.last_token_refresh = sa_func.now()

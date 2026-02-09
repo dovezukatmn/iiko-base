@@ -273,7 +273,28 @@ async function createUser() {
     try {
         const result = await apiPost('/admin/api/users', { username, email, password, role, is_active: true });
         if (result.status >= 400) {
-            container.innerHTML = '<div class="alert alert-danger">⚠️ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>';
+            let errorMsg = 'Неизвестная ошибка';
+            if (result.data.detail) {
+                errorMsg = result.data.detail;
+            } else if (result.data.error) {
+                errorMsg = result.data.error;
+            } else if (typeof result.data === 'string') {
+                errorMsg = result.data;
+            } else {
+                errorMsg = JSON.stringify(result.data);
+            }
+            
+            // Add diagnostic info for "Method Not Allowed" errors
+            if (result.status === 405) {
+                errorMsg += '<br><br><small>Диагностика: HTTP 405 Method Not Allowed. Проверьте:<br>' +
+                    '1. Backend API доступен (проверьте настройку BACKEND_API_URL в .env)<br>' +
+                    '2. Backend сервис запущен<br>' +
+                    '3. Правильные роуты зарегистрированы</small>';
+            } else if (result.status === 502 || result.status === 503) {
+                errorMsg += '<br><br><small>Диагностика: Сервер недоступен. Backend API не отвечает.</small>';
+            }
+            
+            container.innerHTML = '<div class="alert alert-danger">⚠️ ' + errorMsg + '</div>';
             return;
         }
         container.innerHTML = '<div class="alert alert-success">✅ Пользователь "' + escapeHtml(result.data.username) + '" создан с ролью ' + escapeHtml(result.data.role) + '</div>';
@@ -282,7 +303,7 @@ async function createUser() {
         document.getElementById('new-user-password').value = '';
         loadUsers();
     } catch (err) {
-        container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>';
+        container.innerHTML = '<div class="alert alert-danger">❌ Ошибка подключения: ' + escapeHtml(err.message) + '<br><small>Проверьте, что Backend API запущен и доступен</small></div>';
     }
 }
 

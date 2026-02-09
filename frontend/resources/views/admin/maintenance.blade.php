@@ -130,7 +130,15 @@
             <div class="settings-form">
                 <div class="form-group">
                     <label class="form-label">API ключ (apiLogin)</label>
-                    <input type="text" class="form-input" id="api-key-input" placeholder="Введите ваш iiko API логин">
+                    <div style="position:relative;">
+                        <input type="password" class="form-input" id="api-key-input" placeholder="Введите ваш iiko API логин" autocomplete="new-password" style="padding-right:40px;">
+                        <button type="button" id="api-key-toggle-btn" onclick="toggleApiKeyVisibility()" aria-label="Показать API ключ" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;padding:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center;outline:2px solid transparent;outline-offset:2px;border-radius:4px;transition:outline 0.2s;" onfocus="this.style.outline='2px solid var(--accent)'" onblur="this.style.outline='2px solid transparent'">
+                            <span id="api-key-toggle-icon" aria-hidden="true">👁</span>
+                        </button>
+                    </div>
+                    <div style="font-size:11px;color:var(--muted);margin-top:4px;">
+                        💡 При редактировании оставьте пустым, чтобы сохранить текущий ключ
+                    </div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">API URL</label>
@@ -701,16 +709,22 @@ async function saveSettings() {
     const orgId = document.getElementById('org-id-input').value.trim();
     const msgEl = document.getElementById('settings-message');
 
-    if (!apiKey) {
-        msgEl.innerHTML = '<div class="alert alert-warning">⚠️ Введите API ключ</div>';
+    // When updating existing settings, API key is optional
+    // When creating new settings, API key is required
+    if (!currentSettingId && !apiKey) {
+        msgEl.innerHTML = '<div class="alert alert-warning">⚠️ Введите API ключ для новой интеграции</div>';
         return;
     }
 
     const body = {
-        api_key: apiKey,
         api_url: apiUrl || 'https://api-ru.iiko.services/api/1',
         organization_id: orgId || null,
     };
+
+    // Only include api_key if it's provided (non-empty)
+    if (apiKey) {
+        body.api_key = apiKey;
+    }
 
     try {
         let result;
@@ -725,6 +739,8 @@ async function saveSettings() {
         } else {
             msgEl.innerHTML = '<div class="alert alert-success">✓ Настройки сохранены</div>';
             currentSettingId = result.data.id || currentSettingId;
+            // Clear the API key input after successful save for security
+            document.getElementById('api-key-input').value = '';
             loadSettings();
         }
     } catch (err) {
@@ -740,12 +756,27 @@ async function testConnection() {
     try {
         const result = await apiPost('/admin/api/iiko-test', { setting_id: currentSettingId });
         if (result.status >= 400) {
-            statusEl.innerHTML = '<div class="alert alert-danger">❌ Ошибка подключения: ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>';
+            let errorMsg = result.data.detail || JSON.stringify(result.data);
+            
+            // Add helpful hints based on error type
+            if (errorMsg.includes('401') || errorMsg.includes('Неверные') || errorMsg.includes('Invalid')) {
+                errorMsg += '<br><br><strong>Решение:</strong><br>' +
+                    '1. Проверьте API ключ в личном кабинете iiko Cloud<br>' +
+                    '2. Убедитесь что ключ активен и не истёк<br>' +
+                    '3. Скопируйте ключ полностью, без пробелов<br>' +
+                    '4. Используйте новый API ключ из раздела API в iiko Cloud';
+            } else if (errorMsg.includes('timeout') || errorMsg.includes('Тайм-аут')) {
+                errorMsg += '<br><br><strong>Решение:</strong> Проверьте доступность сервера iiko и интернет-соединение';
+            } else if (errorMsg.includes('DNS') || errorMsg.includes('подключения')) {
+                errorMsg += '<br><br><strong>Решение:</strong> Проверьте URL API и сетевые настройки';
+            }
+            
+            statusEl.innerHTML = '<div class="alert alert-danger">❌ Ошибка: ' + errorMsg + '</div>';
         } else {
             statusEl.innerHTML = '<div class="alert alert-success">✓ Подключение к iiko API успешно! Токен получен.</div>';
         }
     } catch (err) {
-        statusEl.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>';
+        statusEl.innerHTML = '<div class="alert alert-danger">❌ Ошибка подключения: ' + escapeHtml(err.message) + '<br><small>Проверьте что Backend API запущен</small></div>';
     }
 }
 
@@ -1191,6 +1222,21 @@ async function createOrUpdateCustomer() {
         if (result.status >= 400) { container.innerHTML = '<div class="alert alert-danger">⚠️ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>'; return; }
         container.innerHTML = '<div class="alert alert-success">✅ Гость сохранен. ID: ' + escapeHtml(result.data.id || JSON.stringify(result.data)) + '</div>';
     } catch (err) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>'; }
+}
+
+function toggleApiKeyVisibility() {
+    const input = document.getElementById('api-key-input');
+    const icon = document.getElementById('api-key-toggle-icon');
+    const button = document.getElementById('api-key-toggle-btn');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.textContent = '🙈';
+        button.setAttribute('aria-label', 'Скрыть API ключ');
+    } else {
+        input.type = 'password';
+        icon.textContent = '👁';
+        button.setAttribute('aria-label', 'Показать API ключ');
+    }
 }
 
 // ─── Init ────────────────────────────────────────────────
