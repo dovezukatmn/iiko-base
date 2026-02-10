@@ -104,7 +104,14 @@
             </div>
         </div>
         <div class="filter-bar">
-            <label class="form-label" style="margin-bottom:0;">Статусы:</label>
+            <label class="form-label" style="margin-bottom:0;">Период:</label>
+            <select class="form-input" id="orders-days-select" style="max-width:150px;">
+                <option value="1" selected>1 день</option>
+                <option value="2">2 дня</option>
+                <option value="3">3 дня</option>
+                <option value="7">7 дней</option>
+            </select>
+            <label class="form-label" style="margin-bottom:0;margin-left:16px;">Статусы:</label>
             <label style="font-size:12px;display:flex;align-items:center;gap:4px;"><input type="checkbox" class="iiko-status-cb" value="Unconfirmed" checked> Не подтвержден</label>
             <label style="font-size:12px;display:flex;align-items:center;gap:4px;"><input type="checkbox" class="iiko-status-cb" value="WaitCooking" checked> Ожидает</label>
             <label style="font-size:12px;display:flex;align-items:center;gap:4px;"><input type="checkbox" class="iiko-status-cb" value="CookingStarted" checked> Готовится</label>
@@ -246,6 +253,7 @@ async function loadOrderOrganizations() {
 async function loadIikoOrders() {
     const settingId = document.getElementById('orders-setting-select').value;
     const orgId = document.getElementById('orders-org-select').value;
+    const days = document.getElementById('orders-days-select').value || 1;
     const container = document.getElementById('iiko-orders-list');
     if (!settingId || !orgId) { container.innerHTML = '<div class="alert alert-warning">⚠️ Выберите настройку и организацию</div>'; return; }
 
@@ -255,11 +263,11 @@ async function loadIikoOrders() {
 
     container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка заказов из iiko Cloud...</div>';
     try {
-        const result = await apiPost('/admin/api/iiko-deliveries', { setting_id: settingId, organization_id: orgId, statuses: statuses });
+        const result = await apiPost('/admin/api/iiko-deliveries', { setting_id: settingId, organization_id: orgId, statuses: statuses, days: parseInt(days) });
         if (result.status >= 400) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>'; return; }
         const data = result.data;
         const orders = data.orders || [];
-        if (orders.length === 0) { container.innerHTML = '<span class="badge badge-muted">Нет заказов по выбранным статусам</span>'; return; }
+        if (orders.length === 0) { container.innerHTML = '<span class="badge badge-muted">Нет заказов по выбранным статусам за выбранный период</span>'; return; }
         let html = '<div style="margin-bottom:8px;"><span class="badge badge-success">Найдено заказов: ' + orders.length + '</span></div>';
         orders.forEach(o => {
             const order = o.order || o;

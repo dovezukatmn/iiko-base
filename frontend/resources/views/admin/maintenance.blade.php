@@ -585,7 +585,15 @@
                     <div class="card-title">🚚 Заказы доставки iiko</div>
                     <div class="card-subtitle">Активные и завершённые заказы из iiko</div>
                 </div>
-                <button class="btn btn-sm" onclick="loadIikoDeliveries()">Загрузить</button>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <select class="form-input" id="deliveries-days-select" style="max-width:120px;">
+                        <option value="1" selected>1 день</option>
+                        <option value="2">2 дня</option>
+                        <option value="3">3 дня</option>
+                        <option value="7">7 дней</option>
+                    </select>
+                    <button class="btn btn-sm" onclick="loadIikoDeliveries()">Загрузить</button>
+                </div>
             </div>
             <div id="data-iiko-deliveries">
                 <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
@@ -1563,6 +1571,7 @@ async function loadDataSection(type) {
 async function loadIikoDeliveries() {
     const settingId = document.getElementById('data-setting-select').value;
     const orgId = document.getElementById('data-org-select').value;
+    const days = document.getElementById('deliveries-days-select').value || 1;
     const container = document.getElementById('data-iiko-deliveries');
 
     if (!settingId || !orgId) {
@@ -1576,6 +1585,7 @@ async function loadIikoDeliveries() {
         const result = await apiPost('/admin/api/iiko-deliveries', {
             setting_id: settingId,
             organization_id: orgId,
+            days: parseInt(days),
         });
 
         if (result.status >= 400) {
@@ -1586,9 +1596,11 @@ async function loadIikoDeliveries() {
         const data = result.data;
         const ordersByOrg = data.ordersByOrganizations || [];
         let html = '<div class="data-section">';
+        
+        const daysLabel = days == 1 ? 'последний день' : `последние ${days} ${days > 4 ? 'дней' : 'дня'}`;
 
         if (ordersByOrg.length === 0) {
-            html += '<span class="badge badge-muted">Нет заказов за последний день</span>';
+            html += `<span class="badge badge-muted">Нет заказов за ${daysLabel}</span>`;
         } else {
             ordersByOrg.forEach(orgOrders => {
                 const orders = orgOrders.orders || [];
