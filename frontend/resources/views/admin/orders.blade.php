@@ -85,23 +85,8 @@
                 <div class="card-subtitle">Заказы доставки в реальном времени</div>
             </div>
         </div>
-        <div class="grid-3" style="margin-bottom:16px;">
-            <div class="form-group">
-                <label class="form-label">Настройка iiko</label>
-                <select class="form-input" id="orders-setting-select">
-                    <option value="">Загрузка...</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Организация</label>
-                <select class="form-input" id="orders-org-select" disabled>
-                    <option value="">Сначала загрузите организации</option>
-                </select>
-            </div>
-            <div class="form-group" style="display:flex;align-items:flex-end;gap:8px;">
-                <button class="btn btn-sm" onclick="loadOrderOrganizations()">📡 Организации</button>
-                <button class="btn btn-primary btn-sm" onclick="loadIikoOrders()">📦 Загрузить заказы</button>
-            </div>
+        <div id="orders-active-setting-info" style="margin-bottom:16px;">
+            <span class="badge badge-muted">Загрузка настроек...</span>
         </div>
         <div class="filter-bar">
             <label class="form-label" style="margin-bottom:0;">Период:</label>
@@ -109,19 +94,17 @@
                 <option value="1" selected>1 день</option>
                 <option value="2">2 дня</option>
                 <option value="3">3 дня</option>
-                <option value="7">7 дней</option>
             </select>
+            <button class="btn btn-primary btn-sm" onclick="loadIikoOrders()">📦 Загрузить заказы</button>
             <label class="form-label" style="margin-bottom:0;margin-left:16px;">Статусы:</label>
             <label style="font-size:12px;display:flex;align-items:center;gap:4px;"><input type="checkbox" class="iiko-status-cb" value="Unconfirmed" checked> Не подтвержден</label>
             <label style="font-size:12px;display:flex;align-items:center;gap:4px;"><input type="checkbox" class="iiko-status-cb" value="WaitCooking" checked> Ожидает</label>
             <label style="font-size:12px;display:flex;align-items:center;gap:4px;"><input type="checkbox" class="iiko-status-cb" value="CookingStarted" checked> Готовится</label>
             <label style="font-size:12px;display:flex;align-items:center;gap:4px;"><input type="checkbox" class="iiko-status-cb" value="OnWay" checked> В пути</label>
             <label style="font-size:12px;display:flex;align-items:center;gap:4px;"><input type="checkbox" class="iiko-status-cb" value="Delivered" checked> Доставлен</label>
-            <label style="font-size:12px;display:flex;align-items:center;gap:4px;"><input type="checkbox" class="iiko-status-cb" value="Closed"> Закрыт</label>
-            <label style="font-size:12px;display:flex;align-items:center;gap:4px;"><input type="checkbox" class="iiko-status-cb" value="Cancelled"> Отменен</label>
         </div>
         <div id="iiko-orders-list">
-            <span class="badge badge-muted">Выберите настройку и организацию, затем нажмите «Загрузить заказы»</span>
+            <span class="badge badge-muted">Нажмите «Загрузить заказы» после загрузки настроек</span>
         </div>
     </div>
 </div>
@@ -223,39 +206,50 @@ async function loadLocalOrders() {
 }
 
 // ─── iiko Orders ─────────────────────────────────────────
+let orderSettingId = null;
+let orderOrgId = null;
+let orderSettingsList = [];
+
 async function loadOrderSettings() {
     try {
         const data = await apiGet('/admin/api/iiko-settings');
         const settings = Array.isArray(data) ? data : [];
-        const sel = document.getElementById('orders-setting-select');
-        sel.innerHTML = '<option value="">Выберите настройку...</option>';
-        settings.forEach(s => {
-            sel.innerHTML += '<option value="' + s.id + '">Интеграция #' + s.id + (s.organization_id ? ' (' + escapeHtml(s.organization_id).substring(0,8) + '...)' : '') + '</option>';
-        });
+        orderSettingsList = settings;
+        // Auto-select first setting with organization_id
+        const withOrg = settings.find(s => s.organization_id);
+        if (withOrg) {
+            orderSettingId = withOrg.id;
+            orderOrgId = withOrg.organization_id;
+        } else if (settings.length > 0) {
+            orderSettingId = settings[0].id;
+            orderOrgId = null;
+        }
+        updateOrderSettingInfo();
     } catch (err) { /* ignore */ }
 }
 
-async function loadOrderOrganizations() {
-    const settingId = document.getElementById('orders-setting-select').value;
-    if (!settingId) { alert('Выберите настройку iiko'); return; }
-    const orgSelect = document.getElementById('orders-org-select');
-    orgSelect.innerHTML = '<option value="">Загрузка...</option>';
-    orgSelect.disabled = true;
-    try {
-        const result = await apiPost('/admin/api/iiko-organizations', { setting_id: settingId });
-        const orgs = result.data?.organizations || [];
-        orgSelect.innerHTML = '<option value="">Выберите организацию...</option>';
-        orgs.forEach(org => { orgSelect.innerHTML += '<option value="' + escapeHtml(org.id) + '">' + escapeHtml(org.name || org.id) + '</option>'; });
-        orgSelect.disabled = false;
-    } catch (err) { orgSelect.innerHTML = '<option value="">Ошибка загрузки</option>'; }
+function updateOrderSettingInfo() {
+    const el = document.getElementById('orders-active-setting-info');
+    if (!el) return;
+    if (!orderSettingId) {
+        el.innerHTML = '<div class="alert alert-warning">⚠️ Сначала создайте настройку API на странице «Обслуживание» → «⚙️ Настройки API»</div>';
+        return;
+    }
+    const setting = orderSettingsList.find(s => s.id === orderSettingId);
+    if (!setting || !setting.organization_id) {
+        el.innerHTML = '<div class="alert alert-warning">⚠️ Укажите Organization ID в настройках API на странице «Обслуживание»</div>';
+        return;
+    }
+    el.innerHTML = '<div style="padding:10px;background:rgba(99,102,241,0.08);border-radius:8px;border:1px solid var(--accent);display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+        '<span style="font-weight:600;">🔗 Интеграция #' + setting.id + '</span>' +
+        '<span class="badge badge-success">🏢 ' + escapeHtml(setting.organization_name || setting.organization_id) + '</span>' +
+    '</div>';
 }
 
 async function loadIikoOrders() {
-    const settingId = document.getElementById('orders-setting-select').value;
-    const orgId = document.getElementById('orders-org-select').value;
     const days = document.getElementById('orders-days-select').value || 1;
     const container = document.getElementById('iiko-orders-list');
-    if (!settingId || !orgId) { container.innerHTML = '<div class="alert alert-warning">⚠️ Выберите настройку и организацию</div>'; return; }
+    if (!orderSettingId || !orderOrgId) { container.innerHTML = '<div class="alert alert-warning">⚠️ Настройте интеграцию и укажите Organization ID на странице «Обслуживание» → «⚙️ Настройки API»</div>'; return; }
 
     const checkboxes = document.querySelectorAll('.iiko-status-cb:checked');
     const statuses = Array.from(checkboxes).map(cb => cb.value).join(',');
@@ -263,7 +257,7 @@ async function loadIikoOrders() {
 
     container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка заказов из iiko Cloud...</div>';
     try {
-        const result = await apiPost('/admin/api/iiko-deliveries', { setting_id: settingId, organization_id: orgId, statuses: statuses, days: parseInt(days) });
+        const result = await apiPost('/admin/api/iiko-deliveries', { setting_id: orderSettingId, organization_id: orderOrgId, statuses: statuses, days: parseInt(days) });
         if (result.status >= 400) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>'; return; }
         const data = result.data;
         // Extract orders from iiko response structure (ordersByOrganizations)
@@ -303,6 +297,6 @@ async function loadIikoOrders() {
 }
 
 // ─── Init ────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', function() { loadLocalOrders(); });
+document.addEventListener('DOMContentLoaded', function() { loadLocalOrders(); loadOrderSettings(); });
 </script>
 @endsection

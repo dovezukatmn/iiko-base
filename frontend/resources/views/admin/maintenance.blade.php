@@ -348,22 +348,8 @@
             </div>
         </div>
 
-        <div class="grid-3" style="margin-bottom:16px;">
-            <div class="form-group">
-                <label class="form-label">Настройка iiko</label>
-                <select class="form-input" id="data-setting-select">
-                    <option value="">Загрузка...</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Организация</label>
-                <select class="form-input" id="data-org-select" disabled>
-                    <option value="">Сначала загрузите организации</option>
-                </select>
-            </div>
-            <div class="form-group" style="display:flex;align-items:flex-end;">
-                <button class="btn btn-primary" onclick="loadDataOrganizations()">📡 Загрузить организации</button>
-            </div>
+        <div id="data-active-setting-info" style="margin-bottom:16px;">
+            <span class="badge badge-muted">Загрузка настроек...</span>
         </div>
 
         <div class="data-section">
@@ -583,14 +569,13 @@
             <div class="card-header">
                 <div>
                     <div class="card-title">🚚 Заказы доставки iiko</div>
-                    <div class="card-subtitle">Активные и завершённые заказы из iiko</div>
+                    <div class="card-subtitle">Активные заказы из iiko (за выбранный период)</div>
                 </div>
                 <div style="display:flex;gap:8px;align-items:center;">
                     <select class="form-input" id="deliveries-days-select" style="max-width:120px;">
                         <option value="1" selected>1 день</option>
                         <option value="2">2 дня</option>
                         <option value="3">3 дня</option>
-                        <option value="7">7 дней</option>
                     </select>
                     <button class="btn btn-sm" onclick="loadIikoDeliveries()">Загрузить</button>
                 </div>
@@ -601,8 +586,6 @@
                 <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" class="maint-delivery-status-cb" value="CookingStarted" checked> Готовится</label>
                 <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" class="maint-delivery-status-cb" value="OnWay" checked> В пути</label>
                 <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" class="maint-delivery-status-cb" value="Delivered" checked> Доставлен</label>
-                <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" class="maint-delivery-status-cb" value="Closed"> Закрыт</label>
-                <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" class="maint-delivery-status-cb" value="Cancelled"> Отменен</label>
             </div>
             <div id="data-iiko-deliveries">
                 <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
@@ -776,6 +759,8 @@ const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 
 // ─── State ───────────────────────────────────────────────
 let currentSettingId = null;
+let currentOrgId = null;
+let currentOrgName = null;
 let settingsList = [];
 
 // ─── Tabs ────────────────────────────────────────────────
@@ -939,8 +924,23 @@ async function loadSettings() {
         const resp = await apiGet('/admin/api/iiko-settings');
         const data = resp.data;
         settingsList = Array.isArray(data) ? data : [];
+        
+        // Auto-select: prefer previously selected, then first with organization_id, then first
+        if (!currentSettingId || !settingsList.find(s => s.id === currentSettingId)) {
+            const withOrg = settingsList.find(s => s.organization_id);
+            currentSettingId = withOrg ? withOrg.id : (settingsList.length > 0 ? settingsList[0].id : null);
+        }
+        
+        // Update global org from selected setting
+        const activeSetting = settingsList.find(s => s.id === currentSettingId);
+        if (activeSetting) {
+            currentOrgId = activeSetting.organization_id || null;
+            currentOrgName = activeSetting.organization_name || null;
+        }
+        
         renderSettingsList();
         populateSettingSelects();
+        updateDataSettingInfo();
     } catch (err) {
         document.getElementById('settings-list').innerHTML = '<div class="alert alert-danger">⚠️ Ошибка: ' + escapeHtml(err.message) + '</div>';
     }
@@ -981,8 +981,13 @@ function renderSettingsList() {
 
 function selectSetting(id) {
     currentSettingId = id;
-    renderSettingsList();
     const setting = settingsList.find(s => s.id === id);
+    if (setting) {
+        currentOrgId = setting.organization_id || null;
+        currentOrgName = setting.organization_name || null;
+    }
+    renderSettingsList();
+    updateDataSettingInfo();
     if (setting) {
         document.getElementById('api-url-input').value = setting.api_url || '';
         // Set dropdown if matching option exists, otherwise set manual input
@@ -1088,7 +1093,7 @@ function populateOrgSelect(sel, orgs) {
 }
 
 function populateSettingSelects() {
-    const selects = ['webhook-setting-select', 'data-setting-select'];
+    const selects = ['webhook-setting-select'];
     selects.forEach(selId => {
         const sel = document.getElementById(selId);
         if (!sel) return;
@@ -1097,9 +1102,32 @@ function populateSettingSelects() {
             const label = s.organization_name 
                 ? escapeHtml(s.organization_name) + ' (ID: #' + s.id + ')'
                 : 'Интеграция #' + s.id + (s.organization_id ? ' (' + escapeHtml(s.organization_id).substring(0,8) + '...)' : '');
-            sel.innerHTML += '<option value="' + s.id + '">' + label + '</option>';
+            sel.innerHTML += '<option value="' + s.id + '"' + (currentSettingId === s.id ? ' selected' : '') + '>' + label + '</option>';
         });
     });
+}
+
+function updateDataSettingInfo() {
+    const el = document.getElementById('data-active-setting-info');
+    if (!el) return;
+    if (!currentSettingId) {
+        el.innerHTML = '<div class="alert alert-warning">⚠️ Сначала создайте настройку API на вкладке «⚙️ Настройки API»</div>';
+        return;
+    }
+    const setting = settingsList.find(s => s.id === currentSettingId);
+    if (!setting) {
+        el.innerHTML = '<div class="alert alert-warning">⚠️ Настройка не найдена</div>';
+        return;
+    }
+    if (!setting.organization_id) {
+        el.innerHTML = '<div class="alert alert-warning">⚠️ Укажите Organization ID в настройках API (вкладка «⚙️ Настройки API»), чтобы использовать все функции</div>';
+        return;
+    }
+    el.innerHTML = '<div style="padding:10px;background:rgba(99,102,241,0.08);border-radius:8px;border:1px solid var(--accent);display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+        '<span style="font-weight:600;">🔗 Активная интеграция #' + setting.id + '</span>' +
+        '<span class="badge badge-success">🏢 ' + escapeHtml(setting.organization_name || setting.organization_id) + '</span>' +
+        '<span style="font-size:11px;color:var(--muted);">Все запросы используют эту настройку автоматически</span>' +
+    '</div>';
 }
 
 async function saveSettings() {
@@ -1178,6 +1206,8 @@ async function deleteSetting(event, settingId) {
             // If the deleted setting was selected, clear the selection
             if (currentSettingId === settingId) {
                 currentSettingId = null;
+                currentOrgId = null;
+                currentOrgName = null;
                 document.getElementById('api-key-input').value = '';
                 document.getElementById('api-url-input').value = 'https://api-ru.iiko.services/api/1';
                 document.getElementById('org-id-select').value = '';
@@ -1345,36 +1375,20 @@ async function loadWebhookEvents() {
 }
 
 // ─── Data Tab ────────────────────────────────────────────
-async function loadDataOrganizations() {
-    const settingId = document.getElementById('data-setting-select').value;
-    if (!settingId) {
-        alert('Выберите настройку iiko');
-        return;
-    }
-    const orgSelect = document.getElementById('data-org-select');
-    orgSelect.innerHTML = '<option value="">Загрузка...</option>';
-    orgSelect.disabled = true;
-
-    try {
-        const result = await apiPost('/admin/api/iiko-organizations', { setting_id: settingId });
-        const orgs = result.data?.organizations || [];
-        orgSelect.innerHTML = '<option value="">Выберите организацию...</option>';
-        orgs.forEach(org => {
-            orgSelect.innerHTML += '<option value="' + escapeHtml(org.id) + '">' + escapeHtml(org.name || org.id) + '</option>';
-        });
-        orgSelect.disabled = false;
-    } catch (err) {
-        orgSelect.innerHTML = '<option value="">Ошибка загрузки</option>';
-    }
+function getActiveSettingAndOrg() {
+    if (!currentSettingId) return { error: 'Сначала создайте настройку API на вкладке «⚙️ Настройки API»' };
+    const setting = settingsList.find(s => s.id === currentSettingId);
+    if (!setting) return { error: 'Настройка не найдена' };
+    if (!setting.organization_id) return { error: 'Укажите Organization ID в настройках API' };
+    return { settingId: currentSettingId, orgId: setting.organization_id };
 }
 
 async function loadDataSection(type) {
-    const settingId = document.getElementById('data-setting-select').value;
-    const orgId = document.getElementById('data-org-select').value;
     const container = document.getElementById('data-' + type);
+    const ctx = getActiveSettingAndOrg();
 
-    if (!settingId || !orgId) {
-        container.innerHTML = '<div class="alert alert-warning">⚠️ Выберите настройку и организацию</div>';
+    if (ctx.error) {
+        container.innerHTML = '<div class="alert alert-warning">⚠️ ' + escapeHtml(ctx.error) + '</div>';
         return;
     }
 
@@ -1395,8 +1409,8 @@ async function loadDataSection(type) {
 
     try {
         const result = await apiPost(endpoints[type], {
-            setting_id: settingId,
-            organization_id: orgId,
+            setting_id: ctx.settingId,
+            organization_id: ctx.orgId,
         });
 
         if (result.status >= 400) {
@@ -1578,13 +1592,12 @@ async function loadDataSection(type) {
 
 // ─── iiko Deliveries ─────────────────────────────────────
 async function loadIikoDeliveries() {
-    const settingId = document.getElementById('data-setting-select').value;
-    const orgId = document.getElementById('data-org-select').value;
     const days = document.getElementById('deliveries-days-select').value || 1;
     const container = document.getElementById('data-iiko-deliveries');
+    const ctx = getActiveSettingAndOrg();
 
-    if (!settingId || !orgId) {
-        container.innerHTML = '<div class="alert alert-warning">⚠️ Выберите настройку и организацию</div>';
+    if (ctx.error) {
+        container.innerHTML = '<div class="alert alert-warning">⚠️ ' + escapeHtml(ctx.error) + '</div>';
         return;
     }
 
@@ -1599,8 +1612,8 @@ async function loadIikoDeliveries() {
 
     try {
         const result = await apiPost('/admin/api/iiko-deliveries', {
-            setting_id: settingId,
-            organization_id: orgId,
+            setting_id: ctx.settingId,
+            organization_id: ctx.orgId,
             statuses: statuses,
             days: parseInt(days),
         });
@@ -1933,9 +1946,8 @@ async function createOrUpdateCustomer() {
 
 // ─── Synchronization Functions ──────────────────────────
 async function syncData(type) {
-    const settingId = document.getElementById('data-setting-select').value;
-    if (!settingId) {
-        alert('Выберите настройку iiko');
+    if (!currentSettingId) {
+        alert('Сначала создайте настройку API на вкладке «⚙️ Настройки API»');
         return;
     }
     
@@ -1955,7 +1967,7 @@ async function syncData(type) {
     });
     
     try {
-        const result = await apiPost(`/admin/api/sync/${type}`, { setting_id: parseInt(settingId) });
+        const result = await apiPost(`/admin/api/sync/${type}`, { setting_id: currentSettingId });
         
         if (result.status >= 400) {
             resultDiv.innerHTML = '<div class="alert alert-danger">❌ Ошибка: ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>';
@@ -2002,7 +2014,7 @@ async function loadSyncHistory() {
     container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>';
     
     try {
-        const orgId = document.getElementById('data-org-select').value || null;
+        const orgId = currentOrgId || null;
         let url = '/admin/api/sync/history?limit=20';
         if (orgId) url += `&organization_id=${encodeURIComponent(orgId)}`;
         
@@ -2053,7 +2065,7 @@ async function loadSyncedData(type) {
     container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>';
     
     try {
-        const orgId = document.getElementById('data-org-select').value || null;
+        const orgId = currentOrgId || null;
         let url = `/admin/api/data/${type}`;
         if (orgId) url += `?organization_id=${encodeURIComponent(orgId)}`;
         
