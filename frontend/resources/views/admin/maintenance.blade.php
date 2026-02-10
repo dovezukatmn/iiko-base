@@ -292,7 +292,7 @@
                 </select>
             </div>
             <div class="form-group" style="display:flex;align-items:flex-end;">
-                <button class="btn btn-primary" onclick="loadOrganizations()">📡 Загрузить организации</button>
+                <button class="btn btn-primary" onclick="loadDataOrganizations()">📡 Загрузить организации</button>
             </div>
         </div>
     </div>
@@ -574,6 +574,7 @@ async function apiDelete(url) {
     const res = await fetch(url, {
         method: 'DELETE',
         headers: {
+            'Accept': 'application/json',
             'X-CSRF-TOKEN': csrfToken,
             'X-Requested-With': 'XMLHttpRequest',
         },
@@ -1041,7 +1042,7 @@ async function loadWebhookEvents() {
 }
 
 // ─── Data Tab ────────────────────────────────────────────
-async function loadOrganizations() {
+async function loadDataOrganizations() {
     const settingId = document.getElementById('data-setting-select').value;
     if (!settingId) {
         alert('Выберите настройку iiko');
