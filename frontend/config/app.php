@@ -13,6 +13,7 @@ return [
     'faker_locale' => 'en_US',
     'key' => env('APP_KEY'),
     'cipher' => 'AES-256-CBC',
+    'backend_api_url' => env('BACKEND_API_URL', 'http://localhost:8000/api/v1'),
 
     'providers' => [
         Illuminate\Auth\AuthServiceProvider::class,

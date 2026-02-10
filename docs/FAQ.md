@@ -289,6 +289,16 @@ psql -h localhost -U iiko_user -d iiko_db
    chmod -R 775 frontend/bootstrap/cache
    ```
 
+### Админ-панель возвращает 500 Server Error
+
+**Быстрое решение:**
+1. Перейдите в `frontend` и сгенерируйте ключ: `php artisan key:generate --force`
+2. Очистите кэши: `php artisan optimize:clear && php artisan config:cache`
+3. Проверьте права: `sudo chown -R www-data:www-data storage bootstrap/cache && sudo chmod -R 775 storage bootstrap/cache`
+4. Перезапустите PHP-FPM: `sudo systemctl restart php8.3-fpm` (или `php-fpm`)
+
+Подробная инструкция: [docs/500_ADMIN_PANEL_ERROR.md](500_ADMIN_PANEL_ERROR.md)
+
 ### SSL сертификат не работает
 
 **Проблема:** ERR_SSL_PROTOCOL_ERROR в браузере
@@ -301,7 +311,7 @@ psql -h localhost -U iiko_user -d iiko_db
 
 2. Получите сертификат заново:
    ```bash
-   certbot --nginx -d yourdomain.com
+   certbot --nginx -d vezuroll.ru
    ```
 
 3. Проверьте конфигурацию:
@@ -312,7 +322,7 @@ psql -h localhost -U iiko_user -d iiko_db
 
 4. Проверьте, что DNS записи настроены правильно:
    ```bash
-   dig yourdomain.com
+   dig vezuroll.ru
    ```
 
 ## Docker
@@ -564,6 +574,26 @@ sudo reboot
 ### Есть ли мобильное приложение?
 
 Нет, но backend API готов для интеграции с мобильным приложением (iOS/Android).
+
+### Как зайти в админку и куда происходит редирект?
+
+- Форма входа доступна по `/login` (или сразу `/admin` — неавторизованных автоматически отправляет на логин).
+- После успешного ввода логина и пароля происходит редирект на `/admin`, где открывается готовая панель с карточками и быстрыми действиями.
+- По умолчанию пользователь не создан: сначала зарегистрируйте его через API (замените `<ADMIN_EMAIL>`, `<ADMIN_USERNAME>` и `<YOUR_SECURE_PASSWORD>` на уникальные значения):
+  ```bash
+  # Создание пользователя с вашим паролем
+  curl -X POST http://localhost:8000/api/v1/auth/register \
+    -H "Content-Type: application/json" \
+    -d '{"email":"<ADMIN_EMAIL>","username":"<ADMIN_USERNAME>","password":"<YOUR_SECURE_PASSWORD>"}'
+  ```
+  Затем назначьте ему роль `admin` в базе данных (подставьте свои значения для `<DB_USER>`, `<DB_NAME>`, `<ADMIN_USERNAME>`, `<ADMIN_EMAIL>`):
+  ```bash
+  psql -h localhost -U <DB_USER> -d <DB_NAME> \
+    -v uname='<ADMIN_USERNAME>' -v email='<ADMIN_EMAIL>' \
+    -c "UPDATE users SET role='admin' WHERE username = :'uname' AND email = :'email';"
+  ```
+- Подставляйте свои значения `<ADMIN_USERNAME>` и `<ADMIN_EMAIL>` вручную; не используйте непроверенные данные в SQL-команде и применяйте параметризованные запросы (или `psql -v`, как выше), если автоматизируете этот шаг.
+- После этого авторизуйтесь на `/login` под логином `<ADMIN_USERNAME>` и выбранным вами паролем, и вы будете перенаправлены на `/admin`.
 
 ### Можно ли использовать для коммерческих проектов?
 

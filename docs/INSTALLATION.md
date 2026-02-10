@@ -89,9 +89,9 @@ nano backend/.env
 
 Измените следующие параметры:
 ```ini
-DATABASE_URL=postgresql://iiko_user:YOUR_PASSWORD@localhost:5432/iiko_db
+DATABASE_URL=postgresql://iiko_user:12101991Qq!@localhost:5432/iiko_db
 SECRET_KEY=your-secret-key-here
-BACKEND_CORS_ORIGINS=["https://yourdomain.com"]
+BACKEND_CORS_ORIGINS=["https://vezuroll.ru", "https://b1d8d8270d0f.vps.myjino.ru"]
 ```
 
 #### Frontend (.env)
@@ -101,9 +101,9 @@ nano frontend/.env
 
 Измените следующие параметры:
 ```ini
-APP_URL=https://yourdomain.com
-DB_PASSWORD=YOUR_PASSWORD
-BACKEND_API_URL=https://api.yourdomain.com/api/v1
+APP_URL=https://vezuroll.ru
+DB_PASSWORD=12101991Qq!
+BACKEND_API_URL=https://api.vezuroll.ru/api/v1
 ```
 
 ### Шаг 5: Настройка Nginx
@@ -113,7 +113,7 @@ BACKEND_API_URL=https://api.yourdomain.com/api/v1
 nano nginx/iiko-base.conf
 ```
 
-Замените `yourdomain.com` на ваш реальный домен во всех местах.
+Замените `yourdomain.com` на ваш реальный домен (vezuroll.ru или b1d8d8270d0f.vps.myjino.ru) во всех местах.
 
 ### Шаг 6: Деплой
 
@@ -264,9 +264,11 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 **A записи:**
 ```
-yourdomain.com        → IP_ADDRESS_OF_YOUR_VPS
-www.yourdomain.com    → IP_ADDRESS_OF_YOUR_VPS
-api.yourdomain.com    → IP_ADDRESS_OF_YOUR_VPS
+vezuroll.ru                  → IP_ADDRESS_OF_YOUR_VPS
+www.vezuroll.ru              → IP_ADDRESS_OF_YOUR_VPS
+api.vezuroll.ru              → IP_ADDRESS_OF_YOUR_VPS
+b1d8d8270d0f.vps.myjino.ru   → IP_ADDRESS_OF_YOUR_VPS
+api.b1d8d8270d0f.vps.myjino.ru → IP_ADDRESS_OF_YOUR_VPS
 ```
 
 ### 2. Обновление конфигурации Nginx
@@ -275,7 +277,7 @@ api.yourdomain.com    → IP_ADDRESS_OF_YOUR_VPS
 # Откройте конфигурацию
 sudo nano /etc/nginx/sites-available/iiko-base.conf
 
-# Замените yourdomain.com на ваш домен
+# Замените yourdomain.com на ваш домен (vezuroll.ru или b1d8d8270d0f.vps.myjino.ru)
 # Сохраните (Ctrl+O) и выйдите (Ctrl+X)
 
 # Перезапустите Nginx
@@ -291,7 +293,7 @@ sudo systemctl restart nginx
 sudo apt-get install certbot python3-certbot-nginx -y
 
 # Получение SSL сертификата
-sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com -d api.yourdomain.com
+sudo certbot --nginx -d vezuroll.ru -d www.vezuroll.ru -d api.vezuroll.ru
 
 # Следуйте инструкциям на экране
 ```

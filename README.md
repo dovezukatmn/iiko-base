@@ -11,6 +11,25 @@
 
 > 🔒 **Security Update**: All dependencies updated to patched versions. See [SECURITY.md](SECURITY.md) for details.
 
+## ⚠️ НЕ МОЖЕТЕ ВОЙТИ В АДМИНКУ? 
+
+**Пишет "Неверные учетные данные"?** Запустите автоматическую диагностику и исправление:
+
+```bash
+cd /var/www/iiko-base  # или ваша директория проекта
+./scripts/diagnose_and_fix_admin.sh
+```
+
+Этот скрипт **автоматически найдет и исправит** все проблемы с входом.
+
+📖 **Подробное руководство:** [ПОЛНОЕ_РЕШЕНИЕ_ВХОДА_В_АДМИНКУ.md](ПОЛНОЕ_РЕШЕНИЕ_ВХОДА_В_АДМИНКУ.md)
+
+**Учетные данные по умолчанию:**
+- Логин: `admin`
+- Пароль: `12101991Qq!` (см. backend/config/settings.py)
+
+🔴 **КРИТИЧЕСКИ ВАЖНО:** Пароль по умолчанию известен публично. **ОБЯЗАТЕЛЬНО** смените его сразу после первого входа в продакшн системе! Для продакшн рекомендуется установить безопасный пароль через переменную окружения `ADMIN_PASSWORD` перед первым запуском.
+
 ## 🚀 Особенности
 
 - ✅ **Python Backend (FastAPI 0.109.1+)** - современный REST API с безопасными зависимостями
@@ -54,6 +73,14 @@ sudo ./scripts/install.sh
 
 Этот скрипт проверит, что все необходимые файлы и директории на месте.
 
+**Или запустите полную проверку готовности к деплою:**
+
+```bash
+bash scripts/verify-deployment.sh
+```
+
+Этот скрипт проверит версии ПО, синтаксис конфигураций, совместимость компонентов и готовность к запуску.
+
 ### 4. Настройте окружение
 
 ```bash
@@ -68,9 +95,21 @@ sudo ./scripts/deploy.sh
 
 ## 📚 Документация
 
-- **[Руководство по установке](docs/INSTALLATION.md)** - подробная инструкция по установке
+### Быстрый старт
+- **[🚀 Руководство по запуску](docs/DEPLOYMENT_GUIDE.md)** - **НОВОЕ!** Полное руководство по запуску приложения
+- **[✅ Отчет о проверке](docs/VERIFICATION_COMPLETE.md)** - **НОВОЕ!** Результаты проверки готовности
 - **[Руководство для новичков](docs/BEGINNER_GUIDE.md)** - если вы только начинаете
+
+### Установка и настройка
+- **[Руководство по установке](docs/INSTALLATION.md)** - подробная инструкция по установке
 - **[Архитектура проекта](docs/ARCHITECTURE.md)** - как все устроено
+
+### Устранение проблем
+- **[🔐 ПОЛНОЕ РЕШЕНИЕ ВХОДА В АДМИНКУ](ПОЛНОЕ_РЕШЕНИЕ_ВХОДА_В_АДМИНКУ.md)** - **⭐ НАЧНИТЕ ЗДЕСЬ!** Все решения проблем с авторизацией
+- **[🔐 Проблемы с входом администратора](docs/ADMIN_LOGIN_TROUBLESHOOTING.md)** - дополнительная информация
+- **[Исправление 500 в админке](docs/500_ADMIN_PANEL_ERROR.md)** - что делать при 500 Server Error на /admin
+- **[Быстрое решение 502](QUICK_FIX_502.md)** - самые частые проблемы
+- **[Решение ошибки 502 Bad Gateway](docs/502_ERROR_FIX.md)** - если сайт не открывается
 - **[Устранение ошибок БД](docs/DATABASE_ERRORS.md)** - решение проблем с PostgreSQL
 - **[FAQ](docs/FAQ.md)** - часто задаваемые вопросы
 
@@ -126,21 +165,21 @@ iiko-base/
 ### Backend (.env)
 
 ```ini
-DATABASE_URL=postgresql://iiko_user:password@localhost:5432/iiko_db
+DATABASE_URL=postgresql://iiko_user:12101991Qq!@localhost:5432/iiko_db
 SECRET_KEY=your-secret-key
-BACKEND_CORS_ORIGINS=["https://yourdomain.com"]
+BACKEND_CORS_ORIGINS=["https://vezuroll.ru", "https://b1d8d8270d0f.vps.myjino.ru"]
 ```
 
 ### Frontend (.env)
 
 ```ini
-APP_URL=https://yourdomain.com
+APP_URL=https://vezuroll.ru
 DB_CONNECTION=pgsql
 DB_HOST=127.0.0.1
 DB_DATABASE=iiko_db
 DB_USERNAME=iiko_user
-DB_PASSWORD=password
-BACKEND_API_URL=https://api.yourdomain.com/api/v1
+DB_PASSWORD=12101991Qq!
+BACKEND_API_URL=https://api.vezuroll.ru/api/v1
 ```
 
 ## 🌐 API Endpoints
@@ -173,9 +212,45 @@ BACKEND_API_URL=https://api.yourdomain.com/api/v1
 
 ```bash
 systemctl status iiko-backend
+systemctl status php8.3-fpm  # или php-fpm
 systemctl status nginx
 systemctl status postgresql
 ```
+
+## 🐛 Устранение неисправностей
+
+### Ошибка 502 Bad Gateway
+
+Если при открытии сайта появляется ошибка "502 Bad Gateway":
+
+```bash
+# Проверьте статус PHP-FPM
+sudo systemctl status php8.3-fpm
+
+# Если PHP-FPM не запущен, запустите его
+sudo systemctl start php8.3-fpm
+sudo systemctl enable php8.3-fpm
+
+# Перезапустите Nginx
+sudo systemctl restart nginx
+```
+
+**Подробное руководство**: [docs/502_ERROR_FIX.md](docs/502_ERROR_FIX.md)
+
+### Ошибки подключения к БД
+
+Если возникают проблемы с подключением к PostgreSQL:
+
+```bash
+# Проверьте статус PostgreSQL
+sudo systemctl status postgresql
+
+# Проверьте существование пользователя БД
+sudo -u postgres psql -c "\du iiko_user"
+```
+
+**Подробное руководство**: [docs/DATABASE_ERRORS.md](docs/DATABASE_ERRORS.md)
+
 
 ### Просмотр логов
 
