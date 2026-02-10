@@ -262,6 +262,21 @@ async def update_iiko_settings(
     return rec
 
 
+@api_router.delete("/iiko/settings/{setting_id}", tags=["iiko"])
+async def delete_iiko_settings(
+    setting_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("admin")),
+):
+    """Удалить настройку интеграции iiko"""
+    rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Настройка не найдена")
+    db.delete(rec)
+    db.commit()
+    return {"status": "ok", "message": "Настройка удалена"}
+
+
 @api_router.post("/iiko/test-connection", tags=["iiko"])
 async def test_iiko_connection(
     setting_id: int,

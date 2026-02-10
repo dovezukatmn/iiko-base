@@ -570,6 +570,17 @@ async function apiPut(url, body = {}) {
     return { status: res.status, data: await res.json() };
 }
 
+async function apiDelete(url) {
+    const res = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRF-TOKEN': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    });
+    return { status: res.status, data: await res.json() };
+}
+
 // ─── Format helpers ──────────────────────────────────────
 function formatUptime(seconds) {
     const d = Math.floor(seconds / 86400);
@@ -684,7 +695,10 @@ function renderSettingsList() {
                     (s.webhook_url ? '<div style="font-size:11px;color:var(--success);">Webhook: ✓</div>' : '') +
                 '</div>' +
             '</div>' +
-            '<span class="badge ' + (isSelected ? 'badge-success' : 'badge-muted') + '">' + (isSelected ? '✓ Выбрано' : 'Выбрать') + '</span>' +
+            '<div style="display:flex;gap:8px;align-items:center;">' +
+                '<span class="badge ' + (isSelected ? 'badge-success' : 'badge-muted') + '">' + (isSelected ? '✓ Выбрано' : 'Выбрать') + '</span>' +
+                '<button type="button" class="btn btn-sm" onclick="deleteSetting(event, ' + s.id + ')" title="Удалить настройку" style="background:var(--danger);color:white;padding:4px 8px;">🗑️</button>' +
+            '</div>' +
             '</div>';
     });
     container.innerHTML = html;
@@ -869,6 +883,38 @@ async function saveSettings() {
         }
     } catch (err) {
         msgEl.innerHTML = '<div class="alert alert-danger">⚠️ ' + escapeHtml(err.message) + '</div>';
+    }
+}
+
+async function deleteSetting(event, settingId) {
+    // Prevent the row click event from firing
+    event.stopPropagation();
+    
+    // Show confirmation dialog
+    if (!confirm('Вы уверены, что хотите удалить эту настройку? Это действие нельзя отменить.')) {
+        return;
+    }
+    
+    try {
+        const result = await apiDelete('/admin/api/iiko-settings/' + settingId);
+        
+        if (result.status >= 400) {
+            alert('⚠️ Ошибка при удалении: ' + (result.data.detail || JSON.stringify(result.data)));
+        } else {
+            // If the deleted setting was selected, clear the selection
+            if (currentSettingId === settingId) {
+                currentSettingId = null;
+                document.getElementById('api-key-input').value = '';
+                document.getElementById('api-url-input').value = 'https://api-ru.iiko.services/api/1';
+                document.getElementById('org-id-select').value = '';
+                document.getElementById('org-id-input').value = '';
+                document.getElementById('settings-message').innerHTML = '';
+            }
+            // Reload settings list
+            loadSettings();
+        }
+    } catch (err) {
+        alert('⚠️ Ошибка при удалении: ' + err.message);
     }
 }
 
