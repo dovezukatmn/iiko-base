@@ -1597,7 +1597,18 @@ async function loadIikoDeliveries() {
         const ordersByOrg = data.ordersByOrganizations || [];
         let html = '<div class="data-section">';
         
-        const daysLabel = days === 1 ? 'последний день' : `последние ${days} ${(days >= 2 && days <= 4) ? 'дня' : 'дней'}`;
+        // Correct Russian pluralization for days
+        let daysWord = 'дней';
+        const lastDigit = days % 10;
+        const lastTwoDigits = days % 100;
+        if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
+            daysWord = 'дней';
+        } else if (lastDigit === 1) {
+            daysWord = 'день';
+        } else if (lastDigit >= 2 && lastDigit <= 4) {
+            daysWord = 'дня';
+        }
+        const daysLabel = days === 1 ? 'последний день' : `последние ${days} ${daysWord}`;
 
         if (ordersByOrg.length === 0) {
             html += `<span class="badge badge-muted">Нет заказов за ${daysLabel}</span>`;

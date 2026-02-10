@@ -936,6 +936,10 @@ async def get_iiko_deliveries(
     _current_user: User = Depends(require_role("operator")),
 ):
     """Получить заказы доставки из iiko по статусам (по умолчанию за последний день)"""
+    # Validate days parameter to prevent TOO_MANY_DATA_REQUESTED errors
+    if days < 1 or days > 7:
+        raise HTTPException(status_code=400, detail="Параметр 'days' должен быть от 1 до 7")
+    
     rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
     if not rec:
         raise HTTPException(status_code=404, detail="Настройка не найдена")
