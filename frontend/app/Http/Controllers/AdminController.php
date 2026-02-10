@@ -166,6 +166,11 @@ class AdminController extends Controller
         return $this->proxyPut($request, "/iiko/settings/{$id}", $request->all());
     }
 
+    public function apiDeleteIikoSettings(Request $request, int $id): JsonResponse
+    {
+        return $this->proxyDelete($request, "/iiko/settings/{$id}");
+    }
+
     public function apiTestConnection(Request $request): JsonResponse
     {
         $settingId = $request->input('setting_id');
@@ -411,6 +416,23 @@ class AdminController extends Controller
         $token = $request->session()->get('token');
         try {
             $response = Http::withToken($token)->timeout(15)->put("{$this->apiBase}{$path}", $body);
+            if ($response->status() === 401) {
+                $detail = $response->json('detail') ?? '';
+                if (str_contains($detail, 'Сессия') || str_contains($detail, 'токен')) {
+                    return response()->json(['error' => $detail, 'session_expired' => true], 401);
+                }
+            }
+            return response()->json($response->json(), $response->status());
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'Ошибка подключения к API: ' . $e->getMessage()], 502);
+        }
+    }
+
+    private function proxyDelete(Request $request, string $path): JsonResponse
+    {
+        $token = $request->session()->get('token');
+        try {
+            $response = Http::withToken($token)->timeout(15)->delete("{$this->apiBase}{$path}");
             if ($response->status() === 401) {
                 $detail = $response->json('detail') ?? '';
                 if (str_contains($detail, 'Сессия') || str_contains($detail, 'токен')) {

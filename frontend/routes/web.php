@@ -29,6 +29,7 @@ Route::middleware('admin.session')->group(function () {
     Route::get('/admin/api/iiko-settings', [AdminController::class, 'apiIikoSettings'])->name('admin.api.iiko_settings');
     Route::post('/admin/api/iiko-settings', [AdminController::class, 'apiCreateIikoSettings'])->name('admin.api.iiko_settings.create');
     Route::put('/admin/api/iiko-settings/{id}', [AdminController::class, 'apiUpdateIikoSettings'])->name('admin.api.iiko_settings.update');
+    Route::delete('/admin/api/iiko-settings/{id}', [AdminController::class, 'apiDeleteIikoSettings'])->name('admin.api.iiko_settings.delete');
     Route::post('/admin/api/iiko-test', [AdminController::class, 'apiTestConnection'])->name('admin.api.iiko_test');
     Route::post('/admin/api/iiko-organizations', [AdminController::class, 'apiOrganizations'])->name('admin.api.iiko_organizations');
     Route::post('/admin/api/iiko-organizations-by-key', [AdminController::class, 'apiOrganizationsByKey'])->name('admin.api.iiko_organizations_by_key');
