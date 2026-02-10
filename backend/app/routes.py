@@ -40,6 +40,10 @@ WEBHOOK_EVENT_ORDER_CHANGED = "OrderChanged"
 WEBHOOK_EVENT_DELIVERY_ORDER_CHANGED = "DeliveryOrderChanged"
 WEBHOOK_EVENT_ORDER = "order"
 
+# Default delivery statuses (active orders only, excludes Closed/Cancelled to prevent TOO_MANY_DATA_REQUESTED)
+DEFAULT_DELIVERY_STATUSES = ["Unconfirmed", "WaitCooking", "ReadyForCooking", "CookingStarted",
+                             "CookingCompleted", "Waiting", "OnWay", "Delivered"]
+DEFAULT_DELIVERY_STATUSES_STR = ",".join(DEFAULT_DELIVERY_STATUSES)
 
 # ─── Auth ────────────────────────────────────────────────────────────────
 @api_router.post("/auth/register", tags=["auth"], response_model=UserResponse)
@@ -930,7 +934,7 @@ async def get_iiko_webhook_settings(
 async def get_iiko_deliveries(
     setting_id: int,
     organization_id: str,
-    statuses: str = "Unconfirmed,WaitCooking,ReadyForCooking,CookingStarted,CookingCompleted,Waiting,OnWay,Delivered,Closed,Cancelled",
+    statuses: str = DEFAULT_DELIVERY_STATUSES_STR,
     days: int = 1,
     db: Session = Depends(get_db),
     _current_user: User = Depends(require_role("operator")),
@@ -943,12 +947,28 @@ async def get_iiko_deliveries(
     rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
     if not rec:
         raise HTTPException(status_code=404, detail="Настройка не найдена")
+    # Use organization_id from settings if not provided or empty
+    org_id = organization_id.strip() if organization_id else ""
+    if not org_id:
+        org_id = rec.organization_id or ""
+    if not org_id:
+        raise HTTPException(status_code=400, detail="Organization ID не задан. Укажите его в настройках iiko.")
     svc = IikoService(db, rec)
     status_list = [s.strip() for s in statuses.split(",") if s.strip()]
+    # If statuses list is empty after parsing, use safe defaults (active orders only)
+    if not status_list:
+        status_list = list(DEFAULT_DELIVERY_STATUSES)
     try:
-        return await svc.get_deliveries_by_statuses(organization_id, status_list, days)
+        return await svc.get_deliveries_by_statuses(org_id, status_list, days)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Ошибка получения заказов: {str(e)}")
+        error_msg = str(e)
+        # Handle TOO_MANY_DATA_REQUESTED by retrying with fewer days
+        if "TOO_MANY_DATA_REQUESTED" in error_msg and days > 1:
+            try:
+                return await svc.get_deliveries_by_statuses(org_id, status_list, 1)
+            except Exception as retry_e:
+                raise HTTPException(status_code=502, detail=f"Ошибка получения заказов: {str(retry_e)}")
+        raise HTTPException(status_code=502, detail=f"Ошибка получения заказов: {error_msg}")
 
 
 # ─── Loyalty / iikoCard ──────────────────────────────────────────────────
@@ -963,9 +983,15 @@ async def get_loyalty_programs(
     rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
     if not rec:
         raise HTTPException(status_code=404, detail="Настройка не найдена")
+    # Use organization_id from settings if not provided or empty
+    org_id = organization_id.strip() if organization_id else ""
+    if not org_id:
+        org_id = rec.organization_id or ""
+    if not org_id:
+        raise HTTPException(status_code=400, detail="Organization ID не задан. Укажите его в настройках iiko.")
     svc = IikoService(db, rec)
     try:
-        return await svc.get_loyalty_programs(organization_id)
+        return await svc.get_loyalty_programs(org_id)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Ошибка получения программ лояльности: {str(e)}")
 
@@ -1411,17 +1437,21 @@ async def get_sync_history(
     """Получить историю синхронизаций"""
     from sqlalchemy import text
     
-    query = text("""
-        SELECT id, organization_id, sync_type, status, items_synced,
-               error_message, duration_ms, started_at, completed_at
-        FROM sync_history
-        WHERE (:org_id IS NULL OR organization_id = :org_id)
-        ORDER BY started_at DESC
-        LIMIT :limit
-    """)
-    
-    result = db.execute(query, {'org_id': organization_id, 'limit': limit})
-    rows = result.fetchall()
+    try:
+        query = text("""
+            SELECT id, organization_id, sync_type, status, items_synced,
+                   error_message, duration_ms, started_at, completed_at
+            FROM sync_history
+            WHERE (:org_id IS NULL OR organization_id = :org_id)
+            ORDER BY started_at DESC
+            LIMIT :limit
+        """)
+        
+        result = db.execute(query, {'org_id': organization_id, 'limit': limit})
+        rows = result.fetchall()
+    except Exception as e:
+        logger.error(f"Error querying sync_history: {e}")
+        return {'history': [], 'error': 'Таблица sync_history не найдена. Выполните миграцию: psql -f database/migrate.sql'}
     
     return {
         'history': [
@@ -1620,19 +1650,23 @@ async def get_categories(
     """Получить категории меню"""
     from sqlalchemy import text
     
-    query = text("""
-        SELECT id, iiko_id, parent_id, name, description, sort_order,
-               is_active, is_visible, image_url, synced_at
-        FROM categories
-        WHERE (:org_id IS NULL OR id IN (
-            SELECT DISTINCT category_id FROM products
-            WHERE category_id IS NOT NULL
-        ))
-        ORDER BY sort_order, name
-    """)
-    
-    result = db.execute(query, {'org_id': organization_id})
-    rows = result.fetchall()
+    try:
+        query = text("""
+            SELECT id, iiko_id, parent_id, name, description, sort_order,
+                   is_active, is_visible, image_url, synced_at
+            FROM categories
+            WHERE (:org_id IS NULL OR id IN (
+                SELECT DISTINCT category_id FROM products
+                WHERE category_id IS NOT NULL
+            ))
+            ORDER BY sort_order, name
+        """)
+        
+        result = db.execute(query, {'org_id': organization_id})
+        rows = result.fetchall()
+    except Exception as e:
+        logger.error(f"Error querying categories: {e}")
+        return {'categories': [], 'error': 'Таблица categories не найдена. Выполните миграцию: psql -f database/migrate.sql'}
     
     return {
         'categories': [
@@ -1665,23 +1699,27 @@ async def get_products(
     """Получить товары"""
     from sqlalchemy import text
     
-    query = text("""
-        SELECT id, iiko_id, category_id, name, description, code, price,
-               is_available, is_visible, weight, synced_at
-        FROM products
-        WHERE (:category_id IS NULL OR category_id = :category_id)
-          AND (:is_available IS NULL OR is_available = :is_available)
-        ORDER BY name
-        LIMIT :limit OFFSET :offset
-    """)
-    
-    result = db.execute(query, {
-        'category_id': category_id,
-        'is_available': is_available,
-        'limit': limit,
-        'offset': offset
-    })
-    rows = result.fetchall()
+    try:
+        query = text("""
+            SELECT id, iiko_id, category_id, name, description, code, price,
+                   is_available, is_visible, weight, synced_at
+            FROM products
+            WHERE (:category_id IS NULL OR category_id = :category_id)
+              AND (:is_available IS NULL OR is_available = :is_available)
+            ORDER BY name
+            LIMIT :limit OFFSET :offset
+        """)
+        
+        result = db.execute(query, {
+            'category_id': category_id,
+            'is_available': is_available,
+            'limit': limit,
+            'offset': offset
+        })
+        rows = result.fetchall()
+    except Exception as e:
+        logger.error(f"Error querying products: {e}")
+        return {'products': [], 'error': 'Таблица products не найдена. Выполните миграцию: psql -f database/migrate.sql'}
     
     return {
         'products': [
@@ -1712,18 +1750,22 @@ async def get_stop_lists(
     """Получить текущие стоп-листы"""
     from sqlalchemy import text
     
-    query = text("""
-        SELECT sl.id, sl.organization_id, sl.terminal_group_id,
-               sl.product_id, p.name as product_name, sl.balance,
-               sl.is_stopped, sl.updated_at
-        FROM stop_lists sl
-        LEFT JOIN products p ON sl.product_id = p.id
-        WHERE (:org_id IS NULL OR sl.organization_id = :org_id) AND sl.is_stopped = TRUE
-        ORDER BY p.name
-    """)
-    
-    result = db.execute(query, {'org_id': organization_id})
-    rows = result.fetchall()
+    try:
+        query = text("""
+            SELECT sl.id, sl.organization_id, sl.terminal_group_id,
+                   sl.product_id, p.name as product_name, sl.balance,
+                   sl.is_stopped, sl.updated_at
+            FROM stop_lists sl
+            LEFT JOIN products p ON sl.product_id = p.id
+            WHERE (:org_id IS NULL OR sl.organization_id = :org_id) AND sl.is_stopped = TRUE
+            ORDER BY p.name
+        """)
+        
+        result = db.execute(query, {'org_id': organization_id})
+        rows = result.fetchall()
+    except Exception as e:
+        logger.error(f"Error querying stop_lists: {e}")
+        return {'stop_lists': [], 'error': 'Таблица stop_lists не найдена. Выполните миграцию: psql -f database/migrate.sql'}
     
     return {
         'stop_lists': [

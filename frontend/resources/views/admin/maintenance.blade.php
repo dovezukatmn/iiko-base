@@ -595,6 +595,15 @@
                     <button class="btn btn-sm" onclick="loadIikoDeliveries()">Загрузить</button>
                 </div>
             </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;font-size:12px;">
+                <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" class="maint-delivery-status-cb" value="Unconfirmed" checked> Не подтвержден</label>
+                <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" class="maint-delivery-status-cb" value="WaitCooking" checked> Ожидает</label>
+                <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" class="maint-delivery-status-cb" value="CookingStarted" checked> Готовится</label>
+                <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" class="maint-delivery-status-cb" value="OnWay" checked> В пути</label>
+                <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" class="maint-delivery-status-cb" value="Delivered" checked> Доставлен</label>
+                <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" class="maint-delivery-status-cb" value="Closed"> Закрыт</label>
+                <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" class="maint-delivery-status-cb" value="Cancelled"> Отменен</label>
+            </div>
             <div id="data-iiko-deliveries">
                 <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
             </div>
@@ -1579,12 +1588,20 @@ async function loadIikoDeliveries() {
         return;
     }
 
+    const checkboxes = document.querySelectorAll('.maint-delivery-status-cb:checked');
+    const statuses = Array.from(checkboxes).map(cb => cb.value).join(',');
+    if (!statuses) {
+        container.innerHTML = '<div class="alert alert-warning">⚠️ Выберите хотя бы один статус</div>';
+        return;
+    }
+
     container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка заказов из iiko...</div>';
 
     try {
         const result = await apiPost('/admin/api/iiko-deliveries', {
             setting_id: settingId,
             organization_id: orgId,
+            statuses: statuses,
             days: parseInt(days),
         });
 
@@ -1998,6 +2015,11 @@ async function loadSyncHistory() {
         
         const history = result.data.history || [];
         
+        if (result.data.error) {
+            container.innerHTML = '<div class="alert alert-warning">⚠️ ' + escapeHtml(result.data.error) + '</div>';
+            return;
+        }
+        
         if (history.length === 0) {
             container.innerHTML = '<span class="badge badge-muted">История синхронизаций пуста</span>';
             return;
@@ -2044,6 +2066,11 @@ async function loadSyncedData(type) {
         
         const data = result.data;
         let html = '<div class="data-section">';
+        
+        // Show migration error if present
+        if (data.error) {
+            html += '<div class="alert alert-warning">⚠️ ' + escapeHtml(data.error) + '</div>';
+        }
         
         if (type === 'categories') {
             const categories = data.categories || [];

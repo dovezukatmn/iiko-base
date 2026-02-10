@@ -266,7 +266,13 @@ async function loadIikoOrders() {
         const result = await apiPost('/admin/api/iiko-deliveries', { setting_id: settingId, organization_id: orgId, statuses: statuses, days: parseInt(days) });
         if (result.status >= 400) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>'; return; }
         const data = result.data;
-        const orders = data.orders || [];
+        // Extract orders from iiko response structure (ordersByOrganizations)
+        let orders = data.orders || [];
+        if (orders.length === 0 && data.ordersByOrganizations) {
+            data.ordersByOrganizations.forEach(org => {
+                if (org.orders) orders = orders.concat(org.orders);
+            });
+        }
         if (orders.length === 0) { container.innerHTML = '<span class="badge badge-muted">Нет заказов по выбранным статусам за выбранный период</span>'; return; }
         let html = '<div style="margin-bottom:8px;"><span class="badge badge-success">Найдено заказов: ' + orders.length + '</span></div>';
         orders.forEach(o => {
