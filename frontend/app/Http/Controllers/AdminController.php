@@ -230,6 +230,34 @@ class AdminController extends Controller
         return $this->proxyPost($request, "/iiko/stop-lists?setting_id={$settingId}&organization_id={$orgId}");
     }
 
+    public function apiCancelCauses(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        $orgId = $request->input('organization_id');
+        return $this->proxyPost($request, "/iiko/cancel-causes?setting_id={$settingId}&organization_id={$orgId}");
+    }
+
+    public function apiRemovalTypes(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        $orgId = $request->input('organization_id');
+        return $this->proxyPost($request, "/iiko/removal-types?setting_id={$settingId}&organization_id={$orgId}");
+    }
+
+    public function apiTipsTypes(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        $orgId = $request->input('organization_id');
+        return $this->proxyPost($request, "/iiko/tips-types?setting_id={$settingId}&organization_id={$orgId}");
+    }
+
+    public function apiDeliveryRestrictions(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        $orgId = $request->input('organization_id');
+        return $this->proxyPost($request, "/iiko/delivery-restrictions?setting_id={$settingId}&organization_id={$orgId}");
+    }
+
     public function apiRegisterWebhook(Request $request): JsonResponse
     {
         $settingId = $request->input('setting_id');

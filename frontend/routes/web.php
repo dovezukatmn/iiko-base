@@ -39,6 +39,10 @@ Route::middleware('admin.session')->group(function () {
     Route::post('/admin/api/iiko-order-types', [AdminController::class, 'apiOrderTypes'])->name('admin.api.iiko_order_types');
     Route::post('/admin/api/iiko-discount-types', [AdminController::class, 'apiDiscountTypes'])->name('admin.api.iiko_discount_types');
     Route::post('/admin/api/iiko-stop-lists', [AdminController::class, 'apiStopLists'])->name('admin.api.iiko_stop_lists');
+    Route::post('/admin/api/iiko-cancel-causes', [AdminController::class, 'apiCancelCauses'])->name('admin.api.iiko_cancel_causes');
+    Route::post('/admin/api/iiko-removal-types', [AdminController::class, 'apiRemovalTypes'])->name('admin.api.iiko_removal_types');
+    Route::post('/admin/api/iiko-tips-types', [AdminController::class, 'apiTipsTypes'])->name('admin.api.iiko_tips_types');
+    Route::post('/admin/api/iiko-delivery-restrictions', [AdminController::class, 'apiDeliveryRestrictions'])->name('admin.api.iiko_delivery_restrictions');
     Route::post('/admin/api/iiko-register-webhook', [AdminController::class, 'apiRegisterWebhook'])->name('admin.api.iiko_register_webhook');
     Route::post('/admin/api/iiko-webhook-settings', [AdminController::class, 'apiWebhookSettings'])->name('admin.api.iiko_webhook_settings');
     Route::get('/admin/api/webhook-events', [AdminController::class, 'apiWebhookEvents'])->name('admin.api.webhook_events');

@@ -381,6 +381,76 @@
                 <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
             </div>
         </div>
+
+        {{-- Cancel Causes --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">❌ Причины отмены</div>
+                    <div class="card-subtitle">Причины отмены заказов</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('cancel-causes')">Загрузить</button>
+            </div>
+            <div id="data-cancel-causes">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+
+        {{-- Removal Types --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">🗑️ Типы удалений</div>
+                    <div class="card-subtitle">Причины удаления позиций из заказа</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('removal-types')">Загрузить</button>
+            </div>
+            <div id="data-removal-types">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+
+        {{-- Tips Types --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">💵 Типы чаевых</div>
+                    <div class="card-subtitle">Доступные типы чаевых</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('tips-types')">Загрузить</button>
+            </div>
+            <div id="data-tips-types">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+
+        {{-- Delivery Restrictions --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">🗺️ Ограничения доставки</div>
+                    <div class="card-subtitle">Зоны доставки, минимальные суммы</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('delivery-restrictions')">Загрузить</button>
+            </div>
+            <div id="data-delivery-restrictions">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+
+        {{-- iiko Deliveries --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">🚚 Заказы доставки iiko</div>
+                    <div class="card-subtitle">Активные и завершённые заказы из iiko</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadIikoDeliveries()">Загрузить</button>
+            </div>
+            <div id="data-iiko-deliveries">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -1053,13 +1123,24 @@ async function loadWebhookEvents() {
             container.innerHTML = '<span class="badge badge-muted">Нет входящих событий</span>';
             return;
         }
-        let html = '<div class="table-wrap"><table><thead><tr><th>ID</th><th>Тип</th><th>Обработан</th><th>Дата</th></tr></thead><tbody>';
+        let html = '<div class="table-wrap"><table><thead><tr><th>ID</th><th>Тип</th><th>Обработан</th><th>Дата</th><th>Данные</th></tr></thead><tbody>';
         events.forEach(e => {
+            let payloadPreview = '—';
+            if (e.payload) {
+                try {
+                    const p = JSON.parse(e.payload);
+                    const keys = Object.keys(p).slice(0, 3).join(', ');
+                    payloadPreview = keys + (Object.keys(p).length > 3 ? '...' : '');
+                } catch(_) {
+                    payloadPreview = escapeHtml(String(e.payload).substring(0, 50)) + '...';
+                }
+            }
             html += '<tr>' +
                 '<td>' + e.id + '</td>' +
                 '<td><span class="badge badge-muted">' + escapeHtml(e.event_type) + '</span></td>' +
                 '<td><span class="badge ' + (e.processed ? 'badge-success' : 'badge-warning') + '">' + (e.processed ? '✓' : '⏳') + '</span></td>' +
                 '<td style="font-size:12px;color:var(--muted);">' + (e.created_at || '—') + '</td>' +
+                '<td style="font-size:11px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(payloadPreview) + '</td>' +
                 '</tr>';
         });
         html += '</tbody></table></div>';
@@ -1112,6 +1193,10 @@ async function loadDataSection(type) {
         'order-types': '/admin/api/iiko-order-types',
         'discount-types': '/admin/api/iiko-discount-types',
         'stop-lists': '/admin/api/iiko-stop-lists',
+        'cancel-causes': '/admin/api/iiko-cancel-causes',
+        'removal-types': '/admin/api/iiko-removal-types',
+        'tips-types': '/admin/api/iiko-tips-types',
+        'delivery-restrictions': '/admin/api/iiko-delivery-restrictions',
     };
 
     try {
@@ -1247,9 +1332,117 @@ async function loadDataSection(type) {
                     });
                 });
             }
+        } else if (type === 'cancel-causes') {
+            const causes = data.cancelCauses || data.causes || [];
+            if (Array.isArray(causes) && causes.length > 0) {
+                html += '<div class="table-wrap"><table><thead><tr><th>Название</th><th>ID</th></tr></thead><tbody>';
+                causes.forEach(c => {
+                    html += '<tr><td><strong>❌ ' + escapeHtml(c.name || '—') + '</strong></td>' +
+                        '<td class="mono" style="font-size:11px;color:var(--muted);">' + escapeHtml(c.id || '') + '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+            } else {
+                html += '<pre style="font-size:12px;max-height:300px;overflow:auto;">' + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+            }
+        } else if (type === 'removal-types') {
+            const types = data.removalTypes || [];
+            if (Array.isArray(types) && types.length > 0) {
+                html += '<div class="table-wrap"><table><thead><tr><th>Название</th><th>ID</th></tr></thead><tbody>';
+                types.forEach(r => {
+                    html += '<tr><td><strong>🗑️ ' + escapeHtml(r.name || '—') + '</strong></td>' +
+                        '<td class="mono" style="font-size:11px;color:var(--muted);">' + escapeHtml(r.id || '') + '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+            } else {
+                html += '<pre style="font-size:12px;max-height:300px;overflow:auto;">' + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+            }
+        } else if (type === 'tips-types') {
+            const tips = data.tipsTypes || data.tips || [];
+            if (Array.isArray(tips) && tips.length > 0) {
+                html += '<div class="table-wrap"><table><thead><tr><th>Название</th><th>ID</th></tr></thead><tbody>';
+                tips.forEach(t => {
+                    html += '<tr><td><strong>💵 ' + escapeHtml(t.name || '—') + '</strong></td>' +
+                        '<td class="mono" style="font-size:11px;color:var(--muted);">' + escapeHtml(t.id || '') + '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+            } else {
+                html += '<pre style="font-size:12px;max-height:300px;overflow:auto;">' + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+            }
+        } else if (type === 'delivery-restrictions') {
+            html += '<pre style="font-size:12px;max-height:400px;overflow:auto;">' + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
         } else {
             // Generic JSON display for other types
-            html += '<div class="json-view">' + escapeHtml(JSON.stringify(data, null, 2)) + '</div>';
+            html += '<pre style="font-size:12px;max-height:400px;overflow:auto;">' + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+        }
+
+        html += '</div>';
+        container.innerHTML = html;
+    } catch (err) {
+        container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>';
+    }
+}
+
+// ─── iiko Deliveries ─────────────────────────────────────
+async function loadIikoDeliveries() {
+    const settingId = document.getElementById('data-setting-select').value;
+    const orgId = document.getElementById('data-org-select').value;
+    const container = document.getElementById('data-iiko-deliveries');
+
+    if (!settingId || !orgId) {
+        container.innerHTML = '<div class="alert alert-warning">⚠️ Выберите настройку и организацию</div>';
+        return;
+    }
+
+    container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка заказов из iiko...</div>';
+
+    try {
+        const result = await apiPost('/admin/api/iiko-deliveries', {
+            setting_id: settingId,
+            organization_id: orgId,
+        });
+
+        if (result.status >= 400) {
+            container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>';
+            return;
+        }
+
+        const data = result.data;
+        const ordersByOrg = data.ordersByOrganizations || [];
+        let html = '<div class="data-section">';
+
+        if (ordersByOrg.length === 0) {
+            html += '<span class="badge badge-muted">Нет заказов за последние 7 дней</span>';
+        } else {
+            ordersByOrg.forEach(orgOrders => {
+                const orders = orgOrders.orders || [];
+                html += '<div style="margin-bottom:8px;font-weight:600;">Заказов: ' + orders.length + '</div>';
+                if (orders.length === 0) {
+                    html += '<span class="badge badge-muted">Нет заказов</span>';
+                } else {
+                    html += '<div class="table-wrap"><table><thead><tr><th>ID</th><th>Номер</th><th>Статус</th><th>Клиент</th><th>Телефон</th><th>Сумма</th><th>Дата</th></tr></thead><tbody>';
+                    orders.forEach(o => {
+                        const statusBadge = {
+                            'Delivered': 'badge-success',
+                            'Closed': 'badge-muted',
+                            'Cancelled': 'badge-danger',
+                            'OnWay': 'badge-warning',
+                            'CookingStarted': 'badge-warning',
+                        };
+                        const badge = statusBadge[o.status] || 'badge-muted';
+                        const customer = o.customer || {};
+                        html += '<tr>' +
+                            '<td class="mono" style="font-size:11px;">' + escapeHtml((o.id || '').substring(0,8)) + '...</td>' +
+                            '<td><strong>' + escapeHtml(o.number || '—') + '</strong></td>' +
+                            '<td><span class="badge ' + badge + '">' + escapeHtml(o.status || '—') + '</span></td>' +
+                            '<td>' + escapeHtml(customer.name || '—') + '</td>' +
+                            '<td>' + escapeHtml(customer.phone || '—') + '</td>' +
+                            '<td style="font-weight:600;">' + (o.sum != null ? o.sum.toFixed(2) : '—') + '</td>' +
+                            '<td style="font-size:12px;color:var(--muted);">' + escapeHtml(o.whenCreated || '—') + '</td>' +
+                            '</tr>';
+                    });
+                    html += '</tbody></table></div>';
+                }
+            });
         }
 
         html += '</div>';
