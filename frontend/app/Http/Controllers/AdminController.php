@@ -486,6 +486,115 @@ class AdminController extends Controller
         }
     }
 
+    // ─── Synchronization Endpoints ──────────────────────────────────────────────
+    
+    public function apiSyncFull(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        return $this->proxyPost($request, "/sync/full", ['setting_id' => $settingId]);
+    }
+
+    public function apiSyncMenu(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        return $this->proxyPost($request, "/sync/menu", ['setting_id' => $settingId]);
+    }
+
+    public function apiSyncStoplist(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        return $this->proxyPost($request, "/sync/stoplist", ['setting_id' => $settingId]);
+    }
+
+    public function apiSyncTerminals(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        return $this->proxyPost($request, "/sync/terminals", ['setting_id' => $settingId]);
+    }
+
+    public function apiSyncPayments(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        return $this->proxyPost($request, "/sync/payments", ['setting_id' => $settingId]);
+    }
+
+    public function apiSyncHistory(Request $request): JsonResponse
+    {
+        $orgId = $request->input('organization_id', '');
+        $limit = $request->input('limit', 50);
+        $path = "/sync/history?limit={$limit}";
+        if ($orgId) {
+            $path .= "&organization_id={$orgId}";
+        }
+        return $this->proxyGet($request, $path);
+    }
+
+    // ─── Webhook Management Endpoints ────────────────────────────────────────────
+    
+    public function apiWebhookRegister(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        $webhookUrl = $request->input('webhook_url');
+        $authToken = $request->input('auth_token');
+        $body = [
+            'setting_id' => $settingId,
+            'webhook_url' => $webhookUrl
+        ];
+        if ($authToken) {
+            $body['auth_token'] = $authToken;
+        }
+        return $this->proxyPost($request, "/webhooks/register", $body);
+    }
+
+    public function apiWebhookSettings(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        return $this->proxyGet($request, "/webhooks/settings?setting_id={$settingId}");
+    }
+
+    public function apiWebhookTest(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        return $this->proxyPost($request, "/webhooks/test", ['setting_id' => $settingId]);
+    }
+
+    // ─── Data Retrieval Endpoints ────────────────────────────────────────────────
+    
+    public function apiDataCategories(Request $request): JsonResponse
+    {
+        $orgId = $request->input('organization_id', '');
+        $path = "/data/categories";
+        if ($orgId) {
+            $path .= "?organization_id={$orgId}";
+        }
+        return $this->proxyGet($request, $path);
+    }
+
+    public function apiDataProducts(Request $request): JsonResponse
+    {
+        $categoryId = $request->input('category_id', '');
+        $isAvailable = $request->input('is_available', '');
+        $limit = $request->input('limit', 100);
+        $offset = $request->input('offset', 0);
+        $path = "/data/products?limit={$limit}&offset={$offset}";
+        if ($categoryId) {
+            $path .= "&category_id={$categoryId}";
+        }
+        if ($isAvailable !== '') {
+            $path .= "&is_available=" . ($isAvailable ? 'true' : 'false');
+        }
+        return $this->proxyGet($request, $path);
+    }
+
+    public function apiDataStopLists(Request $request): JsonResponse
+    {
+        $orgId = $request->input('organization_id', '');
+        if (!$orgId) {
+            return response()->json(['error' => 'organization_id is required'], 400);
+        }
+        return $this->proxyGet($request, "/data/stop-lists?organization_id={$orgId}");
+    }
+
     public static function isValidJwt(?string $token): bool
     {
         return is_string($token) && substr_count($token, '.') === 2;

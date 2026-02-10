@@ -70,5 +70,23 @@ Route::middleware('admin.session')->group(function () {
     Route::post('/admin/api/iiko-loyalty-hold', [AdminController::class, 'apiLoyaltyHold'])->name('admin.api.iiko_loyalty_hold');
     Route::get('/admin/api/iiko-loyalty-transactions', [AdminController::class, 'apiLoyaltyTransactions'])->name('admin.api.iiko_loyalty_transactions');
 
+    // Synchronization API proxy routes
+    Route::post('/admin/api/sync/full', [AdminController::class, 'apiSyncFull'])->name('admin.api.sync.full');
+    Route::post('/admin/api/sync/menu', [AdminController::class, 'apiSyncMenu'])->name('admin.api.sync.menu');
+    Route::post('/admin/api/sync/stoplist', [AdminController::class, 'apiSyncStoplist'])->name('admin.api.sync.stoplist');
+    Route::post('/admin/api/sync/terminals', [AdminController::class, 'apiSyncTerminals'])->name('admin.api.sync.terminals');
+    Route::post('/admin/api/sync/payments', [AdminController::class, 'apiSyncPayments'])->name('admin.api.sync.payments');
+    Route::get('/admin/api/sync/history', [AdminController::class, 'apiSyncHistory'])->name('admin.api.sync.history');
+
+    // Webhook Management API proxy routes
+    Route::post('/admin/api/webhooks/register', [AdminController::class, 'apiWebhookRegister'])->name('admin.api.webhooks.register');
+    Route::get('/admin/api/webhooks/settings', [AdminController::class, 'apiWebhookSettings'])->name('admin.api.webhooks.settings');
+    Route::post('/admin/api/webhooks/test', [AdminController::class, 'apiWebhookTest'])->name('admin.api.webhooks.test');
+
+    // Data Retrieval API proxy routes
+    Route::get('/admin/api/data/categories', [AdminController::class, 'apiDataCategories'])->name('admin.api.data.categories');
+    Route::get('/admin/api/data/products', [AdminController::class, 'apiDataProducts'])->name('admin.api.data.products');
+    Route::get('/admin/api/data/stop-lists', [AdminController::class, 'apiDataStopLists'])->name('admin.api.data.stop_lists');
+
     Route::post('/logout', [AdminController::class, 'logout'])->name('logout');
 });

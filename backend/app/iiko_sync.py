@@ -224,8 +224,18 @@ class IikoSyncService:
             # Get stop list from iiko
             stop_data = await self.iiko_service.get_stop_lists(organization_id)
             
-            # First, mark all products as available
-            self.db.execute(text("UPDATE products SET is_available = TRUE"))
+            # First, mark all products as available for this organization
+            # We need to track which products belong to this org somehow,
+            # or we mark all available and then set specific ones to unavailable
+            self.db.execute(text("""
+                UPDATE products 
+                SET is_available = TRUE 
+                WHERE id IN (
+                    SELECT DISTINCT product_id 
+                    FROM stop_lists 
+                    WHERE organization_id = :org_id
+                )
+            """), {'org_id': organization_id})
             
             # Then mark stopped items as unavailable
             synced_count = 0
@@ -236,31 +246,40 @@ class IikoSyncService:
                 items = tg.get('items', [])
                 
                 for item in items:
-                    product_id = item.get('productId')
+                    iiko_product_id = item.get('productId')
                     balance = item.get('balance', 0)
                     
-                    # Update product availability
+                    # Update product availability by iiko_id
                     self.db.execute(
-                        text("UPDATE products SET is_available = FALSE WHERE iiko_id = :product_id"),
-                        {'product_id': product_id}
+                        text("UPDATE products SET is_available = FALSE WHERE iiko_id = :iiko_product_id"),
+                        {'iiko_product_id': iiko_product_id}
                     )
                     
-                    # Upsert stop_list entry
-                    self.db.execute(
-                        text("""
-                            INSERT INTO stop_lists (organization_id, terminal_group_id, product_id, balance, is_stopped)
-                            VALUES (:org_id, :tg_id, :product_id, :balance, TRUE)
-                            ON CONFLICT (organization_id, terminal_group_id, product_id)
-                            DO UPDATE SET balance = :balance, is_stopped = TRUE, updated_at = CURRENT_TIMESTAMP
-                        """),
-                        {
-                            'org_id': organization_id,
-                            'tg_id': terminal_group_id,
-                            'product_id': product_id,
-                            'balance': balance
-                        }
+                    # Get the local product id from iiko_id for foreign key
+                    result = self.db.execute(
+                        text("SELECT id FROM products WHERE iiko_id = :iiko_product_id LIMIT 1"),
+                        {'iiko_product_id': iiko_product_id}
                     )
-                    synced_count += 1
+                    row = result.fetchone()
+                    if row:
+                        product_id = row[0]
+                        
+                        # Upsert stop_list entry
+                        self.db.execute(
+                            text("""
+                                INSERT INTO stop_lists (organization_id, terminal_group_id, product_id, balance, is_stopped)
+                                VALUES (:org_id, :tg_id, :product_id, :balance, TRUE)
+                                ON CONFLICT (organization_id, terminal_group_id, product_id)
+                                DO UPDATE SET balance = :balance, is_stopped = TRUE, updated_at = CURRENT_TIMESTAMP
+                            """),
+                            {
+                                'org_id': organization_id,
+                                'tg_id': terminal_group_id,
+                                'product_id': product_id,
+                                'balance': balance
+                            }
+                        )
+                        synced_count += 1
             
             self.db.commit()
             
