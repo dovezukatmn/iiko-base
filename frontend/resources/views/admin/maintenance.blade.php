@@ -399,6 +399,15 @@
             <div id="loyalty-programs-list">
                 <span class="badge badge-muted">Выберите настройку API и нажмите «Загрузить»</span>
             </div>
+            <div id="loyalty-wallet-select-section" style="display:none;margin-top:12px;">
+                <div class="form-group">
+                    <label class="form-label">Активная бонусная программа</label>
+                    <select class="form-input" id="loyalty-active-program" onchange="onProgramSelected()">
+                        <option value="">— Выберите программу —</option>
+                    </select>
+                </div>
+                <div id="loyalty-program-detail" style="margin-top:8px;"></div>
+            </div>
         </div>
 
         {{-- Customer Search --}}
@@ -462,6 +471,25 @@
                 <button class="btn" onclick="loyaltyHold()">🔒 Холдировать</button>
             </div>
             <div id="loyalty-operation-result" style="margin-top:12px;"></div>
+        </div>
+    </div>
+
+    {{-- Transaction History --}}
+    <div class="card section-gap">
+        <div class="card-header">
+            <div>
+                <div class="card-title">📋 История операций с бонусами</div>
+                <div class="card-subtitle">Начисления и списания в режиме реального времени</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px;">
+                    <input type="checkbox" id="loyalty-auto-refresh" onchange="toggleAutoRefresh()"> Авто-обновление
+                </label>
+                <button class="btn btn-sm" onclick="loadTransactionHistory()">🔄 Обновить</button>
+            </div>
+        </div>
+        <div id="loyalty-transactions-list">
+            <span class="badge badge-muted">Загрузите программы лояльности для просмотра истории</span>
         </div>
     </div>
 
@@ -1264,6 +1292,10 @@ async function loadLogs() {
 
 // ─── Loyalty Tab ─────────────────────────────────────────
 let currentCustomerId = null;
+let currentCustomerName = null;
+let currentCustomerPhone = null;
+let loyaltyProgramsList = [];
+let autoRefreshInterval = null;
 
 async function loadLoyaltyPrograms() {
     if (!currentSettingId) { alert('Сначала создайте или выберите настройку API'); return; }
@@ -1275,20 +1307,52 @@ async function loadLoyaltyPrograms() {
         const result = await apiPost('/admin/api/iiko-loyalty-programs', { setting_id: currentSettingId, organization_id: setting.organization_id });
         if (result.status >= 400) { container.innerHTML = '<div class="alert alert-danger">⚠️ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>'; return; }
         const programs = result.data.programs || result.data || [];
-        if (!Array.isArray(programs) || programs.length === 0) {
+        loyaltyProgramsList = Array.isArray(programs) ? programs : [];
+        if (loyaltyProgramsList.length === 0) {
             container.innerHTML = '<span class="badge badge-muted">Программы лояльности не найдены</span>';
+            document.getElementById('loyalty-wallet-select-section').style.display = 'none';
             return;
         }
         let html = '';
-        programs.forEach(p => {
+        const programSelect = document.getElementById('loyalty-active-program');
+        programSelect.innerHTML = '<option value="">— Выберите программу —</option>';
+        loyaltyProgramsList.forEach((p, idx) => {
             html += '<div style="padding:10px;border-bottom:1px solid var(--border);">' +
                 '<div style="font-weight:600;color:var(--text-bright);">' + escapeHtml(p.name || p.id || '—') + '</div>' +
                 '<div style="font-size:12px;color:var(--muted);">ID: ' + escapeHtml(p.id || '—') + '</div>' +
                 (p.description ? '<div style="font-size:12px;color:var(--text);margin-top:4px;">' + escapeHtml(p.description) + '</div>' : '') +
                 '</div>';
+            programSelect.innerHTML += '<option value="' + idx + '" data-program-id="' + escapeHtml(p.id || '') + '">' + escapeHtml(p.name || p.id || 'Программа ' + (idx + 1)) + '</option>';
         });
         container.innerHTML = html;
+        document.getElementById('loyalty-wallet-select-section').style.display = 'block';
+        loadTransactionHistory();
     } catch (err) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>'; }
+}
+
+function onProgramSelected() {
+    const select = document.getElementById('loyalty-active-program');
+    const idx = select.value;
+    const detail = document.getElementById('loyalty-program-detail');
+    if (idx === '' || !loyaltyProgramsList[idx]) {
+        detail.innerHTML = '';
+        return;
+    }
+    const p = loyaltyProgramsList[idx];
+    let html = '<div class="data-section" style="padding:8px;">' +
+        '<div style="font-weight:600;color:var(--accent);">✅ ' + escapeHtml(p.name || '—') + '</div>' +
+        '<div style="font-size:12px;color:var(--muted);margin-top:4px;">ID: <span class="mono">' + escapeHtml(p.id || '—') + '</span></div>';
+    if (p.wallets && Array.isArray(p.wallets) && p.wallets.length > 0) {
+        html += '<div style="margin-top:8px;font-size:13px;color:var(--text);">Кошельки программы:</div>';
+        p.wallets.forEach(w => {
+            html += '<div style="font-size:12px;color:var(--muted);padding:2px 0;">• ' + escapeHtml(w.name || w.id || '—') + ' (ID: ' + escapeHtml(w.id || '—') + ')</div>';
+        });
+    }
+    if (p.marketingCampaigns && Array.isArray(p.marketingCampaigns) && p.marketingCampaigns.length > 0) {
+        html += '<div style="margin-top:8px;font-size:13px;color:var(--text);">Маркетинговые кампании: ' + p.marketingCampaigns.length + '</div>';
+    }
+    html += '</div>';
+    detail.innerHTML = html;
 }
 
 async function searchLoyaltyCustomer() {
@@ -1307,6 +1371,8 @@ async function searchLoyaltyCustomer() {
         if (result.status >= 400) { container.innerHTML = '<div class="alert alert-danger">⚠️ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>'; return; }
         const customer = result.data;
         currentCustomerId = customer.id || null;
+        currentCustomerName = customer.name || null;
+        currentCustomerPhone = customer.phone || null;
         let html = '<div class="data-section">' +
             '<div style="font-weight:600;color:var(--text-bright);margin-bottom:8px;">👤 ' + escapeHtml(customer.name || '—') + '</div>' +
             '<div style="font-size:13px;color:var(--text);">ID: <span class="mono">' + escapeHtml(customer.id || '—') + '</span></div>' +
@@ -1314,7 +1380,10 @@ async function searchLoyaltyCustomer() {
             '<div style="font-size:13px;color:var(--text);">Email: ' + escapeHtml(customer.email || '—') + '</div>' +
             '</div>';
         container.innerHTML = html;
-        if (currentCustomerId) loadCustomerBalance();
+        if (currentCustomerId) {
+            loadCustomerBalance();
+            loadTransactionHistory();
+        }
     } catch (err) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>'; }
 }
 
@@ -1370,7 +1439,63 @@ async function loyaltyOperation(type, label) {
         if (result.status >= 400) { container.innerHTML = '<div class="alert alert-danger">⚠️ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>'; return; }
         container.innerHTML = '<div class="alert alert-success">✅ ' + label + ' выполнено успешно</div>';
         loadCustomerBalance();
+        loadTransactionHistory();
     } catch (err) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>'; }
+}
+
+async function loadTransactionHistory() {
+    if (!currentSettingId) return;
+    const setting = settingsList.find(s => s.id === currentSettingId);
+    if (!setting || !setting.organization_id) return;
+    const container = document.getElementById('loyalty-transactions-list');
+    const params = new URLSearchParams({
+        setting_id: currentSettingId,
+        organization_id: setting.organization_id,
+        limit: 50,
+    });
+    if (currentCustomerId) params.append('customer_id', currentCustomerId);
+    try {
+        const result = await apiGet('/admin/api/iiko-loyalty-transactions?' + params.toString());
+        const transactions = Array.isArray(result) ? result : [];
+        if (transactions.length === 0) {
+            container.innerHTML = '<span class="badge badge-muted">Нет операций' + (currentCustomerId ? ' для данного гостя' : '') + '</span>';
+            return;
+        }
+        const opLabels = { topup: '➕ Пополнение', withdraw: '➖ Списание', hold: '🔒 Холд' };
+        const opBadge = { topup: 'badge-success', withdraw: 'badge-danger', hold: 'badge-muted' };
+        let html = '<div class="table-wrap"><table><thead><tr>' +
+            '<th>Дата</th><th>Тип</th><th>Сумма</th><th>Гость</th><th>Кошелек</th><th>Комментарий</th><th>Оператор</th>' +
+            '</tr></thead><tbody>';
+        transactions.forEach(t => {
+            const dt = t.created_at ? new Date(t.created_at).toLocaleString('ru-RU') : '—';
+            const custInfo = (t.customer_name || t.customer_phone) ?
+                escapeHtml(t.customer_name || '') + (t.customer_phone ? ' (' + escapeHtml(t.customer_phone) + ')' : '') :
+                '<span class="mono" style="font-size:11px;">' + escapeHtml(t.customer_id || '—') + '</span>';
+            html += '<tr>' +
+                '<td style="font-size:12px;white-space:nowrap;">' + dt + '</td>' +
+                '<td><span class="badge ' + (opBadge[t.operation_type] || 'badge-muted') + '">' + (opLabels[t.operation_type] || t.operation_type) + '</span></td>' +
+                '<td style="font-weight:600;">' + (t.amount != null ? t.amount.toFixed(2) : '—') + '</td>' +
+                '<td>' + custInfo + '</td>' +
+                '<td style="font-size:12px;">' + escapeHtml(t.wallet_name || t.wallet_id || '—') + '</td>' +
+                '<td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(t.comment || '—') + '</td>' +
+                '<td style="font-size:12px;">' + escapeHtml(t.performed_by || '—') + '</td>' +
+                '</tr>';
+        });
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    } catch (err) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>'; }
+}
+
+function toggleAutoRefresh() {
+    const checked = document.getElementById('loyalty-auto-refresh').checked;
+    if (checked) {
+        autoRefreshInterval = setInterval(() => {
+            loadTransactionHistory();
+            if (currentCustomerId) loadCustomerBalance();
+        }, 10000);
+    } else {
+        if (autoRefreshInterval) { clearInterval(autoRefreshInterval); autoRefreshInterval = null; }
+    }
 }
 
 async function createOrUpdateCustomer() {

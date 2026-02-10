@@ -153,6 +153,25 @@ class LoyaltyBalanceOperation(BaseModel):
     comment: Optional[str] = ""
 
 
+class BonusTransactionResponse(BaseModel):
+    id: int
+    organization_id: str
+    customer_id: str
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    wallet_id: str
+    wallet_name: Optional[str] = None
+    operation_type: str
+    amount: float
+    comment: Optional[str] = None
+    order_id: Optional[str] = None
+    performed_by: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 # --- Admin User Management ---
 class AdminUserCreate(BaseModel):
     email: str = Field(..., min_length=5, max_length=255)

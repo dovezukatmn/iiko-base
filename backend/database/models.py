@@ -1,7 +1,7 @@
 """
 Модели базы данных
 """
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Float
 from sqlalchemy.sql import func
 from database.connection import Base
 
@@ -91,4 +91,23 @@ class ApiLog(Base):
     response_status = Column(Integer, nullable=True)
     response_body = Column(Text, nullable=True)
     duration_ms = Column(Integer, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class BonusTransaction(Base):
+    """История операций с бонусами"""
+    __tablename__ = "bonus_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(String(255), nullable=False, index=True)
+    customer_id = Column(String(255), nullable=False, index=True)
+    customer_name = Column(String(255), nullable=True)
+    customer_phone = Column(String(50), nullable=True)
+    wallet_id = Column(String(255), nullable=False)
+    wallet_name = Column(String(255), nullable=True)
+    operation_type = Column(String(50), nullable=False, index=True)  # topup, withdraw, hold
+    amount = Column(Float, nullable=False)
+    comment = Column(Text, nullable=True)
+    order_id = Column(String(255), nullable=True, index=True)
+    performed_by = Column(String(100), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

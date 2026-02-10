@@ -375,6 +375,19 @@ class AdminController extends Controller
         ]));
     }
 
+    public function apiLoyaltyTransactions(Request $request): JsonResponse
+    {
+        $settingId = $request->input('setting_id');
+        $orgId = $request->input('organization_id');
+        $customerId = $request->input('customer_id', '');
+        $limit = $request->input('limit', 50);
+        $path = "/iiko/loyalty/transactions?setting_id={$settingId}&organization_id={$orgId}&limit={$limit}";
+        if ($customerId) {
+            $path .= "&customer_id={$customerId}";
+        }
+        return $this->proxyGet($request, $path);
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────
 
     private function proxyGet(Request $request, string $path): JsonResponse

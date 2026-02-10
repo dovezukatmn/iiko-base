@@ -64,6 +64,7 @@ Route::middleware('admin.session')->group(function () {
     Route::post('/admin/api/iiko-loyalty-topup', [AdminController::class, 'apiLoyaltyTopup'])->name('admin.api.iiko_loyalty_topup');
     Route::post('/admin/api/iiko-loyalty-withdraw', [AdminController::class, 'apiLoyaltyWithdraw'])->name('admin.api.iiko_loyalty_withdraw');
     Route::post('/admin/api/iiko-loyalty-hold', [AdminController::class, 'apiLoyaltyHold'])->name('admin.api.iiko_loyalty_hold');
+    Route::get('/admin/api/iiko-loyalty-transactions', [AdminController::class, 'apiLoyaltyTransactions'])->name('admin.api.iiko_loyalty_transactions');
 
     Route::post('/logout', [AdminController::class, 'logout'])->name('logout');
 });

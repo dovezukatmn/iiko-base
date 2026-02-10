@@ -137,6 +137,29 @@ CREATE TABLE IF NOT EXISTS api_logs (
 
 CREATE INDEX IF NOT EXISTS idx_api_logs_created_at ON api_logs(created_at);
 
+-- ─── Таблица операций с бонусами ────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS bonus_transactions (
+    id SERIAL PRIMARY KEY,
+    organization_id VARCHAR(255) NOT NULL,
+    customer_id VARCHAR(255) NOT NULL,
+    customer_name VARCHAR(255),
+    customer_phone VARCHAR(50),
+    wallet_id VARCHAR(255) NOT NULL,
+    wallet_name VARCHAR(255),
+    operation_type VARCHAR(50) NOT NULL,
+    amount DOUBLE PRECISION NOT NULL,
+    comment TEXT,
+    order_id VARCHAR(255),
+    performed_by VARCHAR(100),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_bonus_transactions_org ON bonus_transactions(organization_id);
+CREATE INDEX IF NOT EXISTS idx_bonus_transactions_customer ON bonus_transactions(customer_id);
+CREATE INDEX IF NOT EXISTS idx_bonus_transactions_type ON bonus_transactions(operation_type);
+CREATE INDEX IF NOT EXISTS idx_bonus_transactions_order ON bonus_transactions(order_id);
+CREATE INDEX IF NOT EXISTS idx_bonus_transactions_created_at ON bonus_transactions(created_at);
+
 COMMIT;
 
 -- ─── Результат (информационный запрос, не часть транзакции миграции) ────
