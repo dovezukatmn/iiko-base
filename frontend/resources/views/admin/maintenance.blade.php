@@ -779,7 +779,11 @@ function switchTab(name, evt) {
 // ─── HTTP Helpers ─────────────────────────────────────────
 async function apiGet(url) {
     const res = await fetch(url, { headers: { 'X-CSRF-TOKEN': csrfToken } });
-    return res.json();
+    try {
+        return { status: res.status, data: await res.json() };
+    } catch (e) {
+        return { status: res.status, data: { detail: 'Ошибка разбора ответа сервера' } };
+    }
 }
 
 async function apiPost(url, body = {}) {
@@ -792,7 +796,11 @@ async function apiPost(url, body = {}) {
         },
         body: JSON.stringify(body),
     });
-    return { status: res.status, data: await res.json() };
+    try {
+        return { status: res.status, data: await res.json() };
+    } catch (e) {
+        return { status: res.status, data: { detail: 'Ошибка разбора ответа сервера' } };
+    }
 }
 
 async function apiPut(url, body = {}) {
@@ -805,7 +813,11 @@ async function apiPut(url, body = {}) {
         },
         body: JSON.stringify(body),
     });
-    return { status: res.status, data: await res.json() };
+    try {
+        return { status: res.status, data: await res.json() };
+    } catch (e) {
+        return { status: res.status, data: { detail: 'Ошибка разбора ответа сервера' } };
+    }
 }
 
 async function apiDelete(url) {
@@ -817,7 +829,11 @@ async function apiDelete(url) {
             'X-Requested-With': 'XMLHttpRequest',
         },
     });
-    return { status: res.status, data: await res.json() };
+    try {
+        return { status: res.status, data: await res.json() };
+    } catch (e) {
+        return { status: res.status, data: { detail: 'Ошибка разбора ответа сервера' } };
+    }
 }
 
 // ─── Format helpers ──────────────────────────────────────
@@ -840,7 +856,8 @@ function escapeHtml(str) {
 // ─── Status Tab ──────────────────────────────────────────
 async function loadStatus() {
     try {
-        const data = await apiGet('/admin/api/status');
+        const resp = await apiGet('/admin/api/status');
+        const data = resp.data;
         // Server status
         const serverStatus = data.server?.status === 'running';
         document.getElementById('stat-server').innerHTML =
@@ -902,7 +919,8 @@ async function loadStatus() {
 // ─── Settings Tab ────────────────────────────────────────
 async function loadSettings() {
     try {
-        const data = await apiGet('/admin/api/iiko-settings');
+        const resp = await apiGet('/admin/api/iiko-settings');
+        const data = resp.data;
         settingsList = Array.isArray(data) ? data : [];
         renderSettingsList();
         populateSettingSelects();
@@ -1275,7 +1293,8 @@ async function loadWebhookEvents() {
     container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>';
 
     try {
-        const data = await apiGet('/admin/api/webhook-events');
+        const resp = await apiGet('/admin/api/webhook-events');
+        const data = resp.data;
         const events = Array.isArray(data) ? data : [];
         if (events.length === 0) {
             container.innerHTML = '<span class="badge badge-muted">Нет входящих событий</span>';
@@ -1616,7 +1635,8 @@ async function loadLogs() {
     container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>';
 
     try {
-        const data = await apiGet('/admin/api/logs');
+        const resp = await apiGet('/admin/api/logs');
+        const data = resp.data;
         const logs = Array.isArray(data) ? data : [];
         if (logs.length === 0) {
             container.innerHTML = '<span class="badge badge-muted">Нет записей</span>';
@@ -1807,7 +1827,7 @@ async function loadTransactionHistory() {
     if (currentCustomerId) params.append('customer_id', currentCustomerId);
     try {
         const result = await apiGet('/admin/api/iiko-loyalty-transactions?' + params.toString());
-        const transactions = Array.isArray(result) ? result : [];
+        const transactions = Array.isArray(result.data) ? result.data : [];
         if (transactions.length === 0) {
             container.innerHTML = '<span class="badge badge-muted">Нет операций' + (currentCustomerId ? ' для данного гостя' : '') + '</span>';
             return;

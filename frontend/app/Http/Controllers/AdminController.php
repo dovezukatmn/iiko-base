@@ -494,7 +494,7 @@ class AdminController extends Controller
         return $this->proxyPost($request, "/sync/full", ['setting_id' => $settingId]);
     }
 
-    public function apiSyncMenu(Request $request): JsonResponse
+    public function apiSyncMenuEndpoint(Request $request): JsonResponse
     {
         $settingId = $request->input('setting_id');
         return $this->proxyPost($request, "/sync/menu", ['setting_id' => $settingId]);
@@ -546,7 +546,7 @@ class AdminController extends Controller
         return $this->proxyPost($request, "/webhooks/register", $body);
     }
 
-    public function apiWebhookSettings(Request $request): JsonResponse
+    public function apiWebhookSettingsGet(Request $request): JsonResponse
     {
         $settingId = $request->input('setting_id');
         return $this->proxyGet($request, "/webhooks/settings?setting_id={$settingId}");

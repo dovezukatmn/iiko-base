@@ -72,7 +72,7 @@ Route::middleware('admin.session')->group(function () {
 
     // Synchronization API proxy routes
     Route::post('/admin/api/sync/full', [AdminController::class, 'apiSyncFull'])->name('admin.api.sync.full');
-    Route::post('/admin/api/sync/menu', [AdminController::class, 'apiSyncMenu'])->name('admin.api.sync.menu');
+    Route::post('/admin/api/sync/menu', [AdminController::class, 'apiSyncMenuEndpoint'])->name('admin.api.sync.menu');
     Route::post('/admin/api/sync/stoplist', [AdminController::class, 'apiSyncStoplist'])->name('admin.api.sync.stoplist');
     Route::post('/admin/api/sync/terminals', [AdminController::class, 'apiSyncTerminals'])->name('admin.api.sync.terminals');
     Route::post('/admin/api/sync/payments', [AdminController::class, 'apiSyncPayments'])->name('admin.api.sync.payments');
@@ -80,7 +80,7 @@ Route::middleware('admin.session')->group(function () {
 
     // Webhook Management API proxy routes
     Route::post('/admin/api/webhooks/register', [AdminController::class, 'apiWebhookRegister'])->name('admin.api.webhooks.register');
-    Route::get('/admin/api/webhooks/settings', [AdminController::class, 'apiWebhookSettings'])->name('admin.api.webhooks.settings');
+    Route::get('/admin/api/webhooks/settings', [AdminController::class, 'apiWebhookSettingsGet'])->name('admin.api.webhooks.settings');
     Route::post('/admin/api/webhooks/test', [AdminController::class, 'apiWebhookTest'])->name('admin.api.webhooks.test');
 
     // Data Retrieval API proxy routes

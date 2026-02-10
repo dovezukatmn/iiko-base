@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
 from sqlalchemy import func as sa_func
-from typing import List as TypingList
+from typing import List as TypingList, Optional
 from database.connection import get_db
 from database.models import (
     MenuItem, User, IikoSettings, Order, WebhookEvent, ApiLog, BonusTransaction,
