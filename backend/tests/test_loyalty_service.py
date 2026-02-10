@@ -48,12 +48,12 @@ async def test_get_loyalty_programs(mock_db, mock_settings):
     with patch("httpx.AsyncClient") as mock_client_cls:
         mock_client_cls.return_value = _patch_httpx(response)
 
-        result = await svc.get_loyalty_programs(["org-123"])
+        result = await svc.get_loyalty_programs("org-123")
         assert result == {"programs": [{"id": "prog1", "name": "Bonus"}]}
 
         call_args = mock_client_cls.return_value.request.call_args
         json_payload = call_args.kwargs.get("json") or call_args[1].get("json")
-        assert json_payload["organizationIds"] == ["org-123"]
+        assert json_payload["organizationId"] == "org-123"
 
 
 @pytest.mark.asyncio

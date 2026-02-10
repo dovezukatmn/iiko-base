@@ -330,14 +330,14 @@ class IikoService:
         )
 
     # ─── Loyalty / iikoCard ─────────────────────────────────────────────────
-    async def get_loyalty_programs(self, organization_ids: list) -> dict:
+    async def get_loyalty_programs(self, organization_id: str) -> dict:
         """Получить список программ лояльности (бонусных программ)"""
         if not self._token:
             await self.authenticate()
         return await self._request(
             "POST",
             "/loyalty/iiko/program",
-            json_data={"organizationIds": organization_ids},
+            json_data={"organizationId": organization_id},
         )
 
     async def get_customer_info(self, organization_id: str, customer_id: str = None,

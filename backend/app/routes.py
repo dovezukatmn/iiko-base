@@ -870,7 +870,7 @@ async def get_loyalty_programs(
         raise HTTPException(status_code=404, detail="Настройка не найдена")
     svc = IikoService(db, rec)
     try:
-        return await svc.get_loyalty_programs([organization_id])
+        return await svc.get_loyalty_programs(organization_id)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Ошибка получения программ лояльности: {str(e)}")
 
