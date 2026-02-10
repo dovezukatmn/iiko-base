@@ -313,7 +313,11 @@ class AdminController extends Controller
         $orgId = $request->input('organization_id');
         $statuses = $request->input('statuses', '');
         $days = $request->input('days', 1);
-        return $this->proxyPost($request, "/iiko/deliveries?setting_id={$settingId}&organization_id={$orgId}&statuses=" . urlencode($statuses) . "&days={$days}");
+        $path = "/iiko/deliveries?setting_id={$settingId}&organization_id={$orgId}&days={$days}";
+        if ($statuses) {
+            $path .= "&statuses=" . urlencode($statuses);
+        }
+        return $this->proxyPost($request, $path);
     }
 
     public function apiUsers(Request $request): JsonResponse
