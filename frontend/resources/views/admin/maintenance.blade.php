@@ -697,7 +697,7 @@ function renderSettingsList() {
             '</div>' +
             '<div style="display:flex;gap:8px;align-items:center;">' +
                 '<span class="badge ' + (isSelected ? 'badge-success' : 'badge-muted') + '">' + (isSelected ? '✓ Выбрано' : 'Выбрать') + '</span>' +
-                '<button type="button" class="btn btn-sm" onclick="deleteSetting(event, ' + s.id + ')" title="Удалить настройку" style="background:var(--danger);color:white;padding:4px 8px;">🗑️</button>' +
+                '<button type="button" class="btn btn-sm" onclick="deleteSetting(event, ' + s.id + ')" title="Удалить настройку" aria-label="Удалить настройку интеграции #' + s.id + '" style="background:var(--danger);color:white;padding:4px 8px;">🗑️</button>' +
             '</div>' +
             '</div>';
     });
