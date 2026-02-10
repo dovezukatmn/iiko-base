@@ -45,6 +45,9 @@ DEFAULT_DELIVERY_STATUSES = ["Unconfirmed", "WaitCooking", "ReadyForCooking", "C
                              "CookingCompleted", "Waiting", "OnWay", "Delivered"]
 DEFAULT_DELIVERY_STATUSES_STR = ",".join(DEFAULT_DELIVERY_STATUSES)
 
+# Statuses excluded during retry to reduce data volume
+HEAVY_DELIVERY_STATUSES = {"Closed", "Cancelled", "Delivered"}
+
 # ─── Auth ────────────────────────────────────────────────────────────────
 @api_router.post("/auth/register", tags=["auth"], response_model=UserResponse)
 async def register(user_in: UserCreate, db: Session = Depends(get_db)):
@@ -941,8 +944,8 @@ async def get_iiko_deliveries(
 ):
     """Получить заказы доставки из iiko по статусам (по умолчанию за последний день)"""
     # Validate days parameter to prevent TOO_MANY_DATA_REQUESTED errors
-    if days < 1 or days > 7:
-        raise HTTPException(status_code=400, detail="Параметр 'days' должен быть от 1 до 7")
+    if days < 1 or days > 3:
+        raise HTTPException(status_code=400, detail="Параметр 'days' должен быть от 1 до 3")
     
     rec = db.query(IikoSettings).filter(IikoSettings.id == setting_id).first()
     if not rec:
@@ -962,12 +965,22 @@ async def get_iiko_deliveries(
         return await svc.get_deliveries_by_statuses(org_id, status_list, days)
     except Exception as e:
         error_msg = str(e)
-        # Handle TOO_MANY_DATA_REQUESTED by retrying with fewer days
-        if "TOO_MANY_DATA_REQUESTED" in error_msg and days > 1:
-            try:
-                return await svc.get_deliveries_by_statuses(org_id, status_list, 1)
-            except Exception as retry_e:
-                raise HTTPException(status_code=502, detail=f"Ошибка получения заказов: {str(retry_e)}")
+        # Handle TOO_MANY_DATA_REQUESTED by retrying with fewer days and/or fewer statuses
+        if "TOO_MANY_DATA_REQUESTED" in error_msg:
+            # First retry: reduce to 1 day if days > 1
+            if days > 1:
+                try:
+                    return await svc.get_deliveries_by_statuses(org_id, status_list, 1)
+                except Exception:
+                    pass
+            # Second retry: use only active statuses (exclude heavy statuses)
+            active_only = [s for s in status_list if s not in HEAVY_DELIVERY_STATUSES]
+            if active_only and len(active_only) < len(status_list):
+                try:
+                    return await svc.get_deliveries_by_statuses(org_id, active_only, 1)
+                except Exception as retry_e:
+                    raise HTTPException(status_code=502, detail=f"Не удалось загрузить данные — слишком большой объём. Все попытки с сокращением периода и статусов исчерпаны: {str(retry_e)}")
+            raise HTTPException(status_code=502, detail="Не удалось загрузить данные. Период слишком большой или слишком много заказов в выбранных статусах.")
         raise HTTPException(status_code=502, detail=f"Ошибка получения заказов: {error_msg}")
 
 

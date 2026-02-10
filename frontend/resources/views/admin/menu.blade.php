@@ -66,29 +66,17 @@
                 <div class="card-subtitle">Номенклатура из iiko в реальном времени</div>
             </div>
         </div>
-        <div class="grid-3" style="margin-bottom:16px;">
-            <div class="form-group">
-                <label class="form-label">Настройка iiko</label>
-                <select class="form-input" id="menu-setting-select">
-                    <option value="">Загрузка...</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Организация</label>
-                <select class="form-input" id="menu-org-select" disabled>
-                    <option value="">Сначала загрузите организации</option>
-                </select>
-            </div>
-            <div class="form-group" style="display:flex;align-items:flex-end;gap:8px;">
-                <button class="btn btn-sm" onclick="loadMenuOrganizations()">📡 Организации</button>
-                <button class="btn btn-primary btn-sm" onclick="loadIikoMenu()">📋 Загрузить меню</button>
-            </div>
+        <div id="menu-active-setting-info" style="margin-bottom:16px;">
+            <span class="badge badge-muted">Загрузка настроек...</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+            <button class="btn btn-primary btn-sm" onclick="loadIikoMenu()">📋 Загрузить меню</button>
         </div>
         <div class="filter-bar">
             <input type="text" class="form-input search-input" id="iiko-menu-search" placeholder="🔍 Поиск по названию..." oninput="filterIikoMenu()">
         </div>
         <div id="iiko-menu-list">
-            <span class="badge badge-muted">Выберите настройку и организацию, затем нажмите «Загрузить меню»</span>
+            <span class="badge badge-muted">Нажмите «Загрузить меню» после загрузки настроек</span>
         </div>
     </div>
 </div>
@@ -102,23 +90,11 @@
                 <div class="card-subtitle">Синхронизируйте меню из iiko Cloud в локальную базу данных</div>
             </div>
         </div>
-        <div class="grid-3" style="margin-bottom:16px;">
-            <div class="form-group">
-                <label class="form-label">Настройка iiko</label>
-                <select class="form-input" id="sync-setting-select">
-                    <option value="">Загрузка...</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Организация</label>
-                <select class="form-input" id="sync-org-select" disabled>
-                    <option value="">Сначала загрузите организации</option>
-                </select>
-            </div>
-            <div class="form-group" style="display:flex;align-items:flex-end;gap:8px;">
-                <button class="btn btn-sm" onclick="loadSyncOrganizations()">📡 Организации</button>
-                <button class="btn btn-primary" onclick="syncMenu()">🔄 Синхронизировать</button>
-            </div>
+        <div id="sync-active-setting-info" style="margin-bottom:16px;">
+            <span class="badge badge-muted">Загрузка настроек...</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+            <button class="btn btn-primary" onclick="syncMenu()">🔄 Синхронизировать</button>
         </div>
         <div id="sync-result"></div>
     </div>
@@ -129,8 +105,9 @@
 <script>
 const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 
-let localMenuData = [];
-let iikoMenuData = [];
+let menuSettingId = null;
+let menuOrgId = null;
+let menuSettingsList = [];
 
 function switchMenuTab(name, evt) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -222,56 +199,50 @@ async function loadMenuSettings() {
     try {
         const data = await apiGet('/admin/api/iiko-settings');
         const settings = Array.isArray(data) ? data : [];
-        ['menu-setting-select', 'sync-setting-select'].forEach(selId => {
-            const sel = document.getElementById(selId);
-            if (!sel) return;
-            sel.innerHTML = '<option value="">Выберите настройку...</option>';
-            settings.forEach(s => {
-                sel.innerHTML += '<option value="' + s.id + '">Интеграция #' + s.id + (s.organization_id ? ' (' + escapeHtml(s.organization_id).substring(0,8) + '...)' : '') + '</option>';
-            });
-        });
+        menuSettingsList = settings;
+        // Auto-select first setting with organization_id
+        const withOrg = settings.find(s => s.organization_id);
+        if (withOrg) {
+            menuSettingId = withOrg.id;
+            menuOrgId = withOrg.organization_id;
+        } else if (settings.length > 0) {
+            menuSettingId = settings[0].id;
+            menuOrgId = null;
+        }
+        updateMenuSettingInfo();
     } catch (err) { /* ignore */ }
 }
 
-async function loadMenuOrganizations() {
-    const settingId = document.getElementById('menu-setting-select').value;
-    if (!settingId) { alert('Выберите настройку iiko'); return; }
-    const orgSelect = document.getElementById('menu-org-select');
-    orgSelect.innerHTML = '<option value="">Загрузка...</option>';
-    orgSelect.disabled = true;
-    try {
-        const result = await apiPost('/admin/api/iiko-organizations', { setting_id: settingId });
-        const orgs = result.data?.organizations || [];
-        orgSelect.innerHTML = '<option value="">Выберите организацию...</option>';
-        orgs.forEach(org => { orgSelect.innerHTML += '<option value="' + escapeHtml(org.id) + '">' + escapeHtml(org.name || org.id) + '</option>'; });
-        orgSelect.disabled = false;
-    } catch (err) { orgSelect.innerHTML = '<option value="">Ошибка загрузки</option>'; }
-}
-
-async function loadSyncOrganizations() {
-    const settingId = document.getElementById('sync-setting-select').value;
-    if (!settingId) { alert('Выберите настройку iiko'); return; }
-    const orgSelect = document.getElementById('sync-org-select');
-    orgSelect.innerHTML = '<option value="">Загрузка...</option>';
-    orgSelect.disabled = true;
-    try {
-        const result = await apiPost('/admin/api/iiko-organizations', { setting_id: settingId });
-        const orgs = result.data?.organizations || [];
-        orgSelect.innerHTML = '<option value="">Выберите организацию...</option>';
-        orgs.forEach(org => { orgSelect.innerHTML += '<option value="' + escapeHtml(org.id) + '">' + escapeHtml(org.name || org.id) + '</option>'; });
-        orgSelect.disabled = false;
-    } catch (err) { orgSelect.innerHTML = '<option value="">Ошибка загрузки</option>'; }
+function updateMenuSettingInfo() {
+    ['menu-active-setting-info', 'sync-active-setting-info'].forEach(elId => {
+        const el = document.getElementById(elId);
+        if (!el) return;
+        if (!menuSettingId) {
+            el.innerHTML = '<div class="alert alert-warning">⚠️ Сначала создайте настройку API на странице «Обслуживание» → «⚙️ Настройки API»</div>';
+            return;
+        }
+        const setting = menuSettingsList.find(s => s.id === menuSettingId);
+        if (!setting || !setting.organization_id) {
+            el.innerHTML = '<div class="alert alert-warning">⚠️ Укажите Organization ID в настройках API на странице «Обслуживание»</div>';
+            return;
+        }
+        el.innerHTML = '<div style="padding:10px;background:rgba(99,102,241,0.08);border-radius:8px;border:1px solid var(--accent);display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+            '<span style="font-weight:600;">🔗 Интеграция #' + setting.id + '</span>' +
+            '<span class="badge badge-success">🏢 ' + escapeHtml(setting.organization_name || setting.organization_id) + '</span>' +
+        '</div>';
+    });
 }
 
 // ─── iiko Menu ───────────────────────────────────────────
+let localMenuData = [];
+let iikoMenuData = [];
+
 async function loadIikoMenu() {
-    const settingId = document.getElementById('menu-setting-select').value;
-    const orgId = document.getElementById('menu-org-select').value;
     const container = document.getElementById('iiko-menu-list');
-    if (!settingId || !orgId) { container.innerHTML = '<div class="alert alert-warning">⚠️ Выберите настройку и организацию</div>'; return; }
+    if (!menuSettingId || !menuOrgId) { container.innerHTML = '<div class="alert alert-warning">⚠️ Настройте интеграцию и укажите Organization ID на странице «Обслуживание» → «⚙️ Настройки API»</div>'; return; }
     container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка меню из iiko Cloud...</div>';
     try {
-        const result = await apiPost('/admin/api/iiko-menu', { setting_id: settingId, organization_id: orgId });
+        const result = await apiPost('/admin/api/iiko-menu', { setting_id: menuSettingId, organization_id: menuOrgId });
         if (result.status >= 400) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>'; return; }
         const data = result.data;
         const products = data.products || [];
@@ -327,19 +298,17 @@ function filterIikoMenu() {
 
 // ─── Sync ────────────────────────────────────────────────
 async function syncMenu() {
-    const settingId = document.getElementById('sync-setting-select').value;
-    const orgId = document.getElementById('sync-org-select').value;
     const container = document.getElementById('sync-result');
-    if (!settingId || !orgId) { container.innerHTML = '<div class="alert alert-warning">⚠️ Выберите настройку и организацию</div>'; return; }
+    if (!menuSettingId || !menuOrgId) { container.innerHTML = '<div class="alert alert-warning">⚠️ Настройте интеграцию и укажите Organization ID на странице «Обслуживание» → «⚙️ Настройки API»</div>'; return; }
     container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Синхронизация меню...</div>';
     try {
-        const result = await apiPost('/admin/api/iiko-sync-menu', { setting_id: settingId, organization_id: orgId });
+        const result = await apiPost('/admin/api/iiko-sync-menu', { setting_id: menuSettingId, organization_id: menuOrgId });
         if (result.status >= 400) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>'; return; }
         container.innerHTML = '<div class="alert alert-success">✓ ' + escapeHtml(result.data.detail || 'Синхронизация завершена') + '</div>';
     } catch (err) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>'; }
 }
 
 // ─── Init ────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', function() { loadLocalMenu(); });
+document.addEventListener('DOMContentLoaded', function() { loadLocalMenu(); loadMenuSettings(); });
 </script>
 @endsection
