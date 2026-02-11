@@ -718,6 +718,24 @@ async def process_soi_order_event(payload: dict, db: Session, event: WebhookEven
                 
                 db.add(order)
                 logger.info(f"Создан новый заказ: external_id={external_id}, iiko_id={iiko_order_id}")
+        
+        # Сохраняем изменения в БД
+        db.commit()
+        if order:
+            db.refresh(order)
+        
+        # ✅ Отправка исходящих вебхуков
+        if order:
+            from app.outgoing_webhook_service import OutgoingWebhookService
+            webhook_service = OutgoingWebhookService(db)
+            
+            # Определяем тип события для исходящих вебхуков
+            if event.event_type == "CREATE":
+                await webhook_service.send_order_webhook(order, "order.created")
+            elif event.event_type == "UPDATE":
+                await webhook_service.send_order_webhook(order, "order.updated")
+        
+        event.processed = True
             else:
                 logger.warning(f"Заказ {external_id} не найден для UPDATE события")
         
@@ -882,8 +900,15 @@ async def update_order_status_in_iiko(
         )
         
         # Обновляем локальный статус
+        old_status = order.status
         order.status = status
         db.commit()
+        db.refresh(order)
+        
+        # ✅ Отправляем исходящие вебхуки о смене статуса
+        from app.outgoing_webhook_service import OutgoingWebhookService
+        webhook_service = OutgoingWebhookService(db)
+        await webhook_service.send_order_webhook(order, "order.status_changed", old_status)
         
         return {"status": "success", "result": result}
     except Exception as e:
@@ -1054,6 +1079,12 @@ async def cancel_order_in_iiko(
         # Обновляем локальный статус
         order.status = "Cancelled"
         db.commit()
+        db.refresh(order)
+        
+        # ✅ Отправляем исходящие вебхуки об отмене заказа
+        from app.outgoing_webhook_service import OutgoingWebhookService
+        webhook_service = OutgoingWebhookService(db)
+        await webhook_service.send_order_webhook(order, "order.cancelled")
         
         return {"status": "success", "result": result}
     except Exception as e:
