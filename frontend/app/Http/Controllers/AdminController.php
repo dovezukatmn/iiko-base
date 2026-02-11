@@ -285,7 +285,7 @@ class AdminController extends Controller
 
     public function apiWebhookEvents(Request $request): JsonResponse
     {
-        $query = http_build_query($request->only(['limit', 'skip']));
+        $query = http_build_query($request->only(['limit', 'skip', 'event_type', 'processed', 'search']));
         $path = '/webhooks/events' . ($query ? "?{$query}" : '');
         return $this->proxyGet($request, $path);
     }

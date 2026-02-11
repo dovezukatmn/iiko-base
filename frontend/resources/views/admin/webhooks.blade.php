@@ -936,7 +936,11 @@ async function apiGet(url) {
     const res = await fetch(url, {
         headers: { 'X-CSRF-TOKEN': csrfToken }
     });
-    return res.json();
+    try {
+        return { status: res.status, data: await res.json() };
+    } catch (e) {
+        return { status: res.status, data: { detail: 'Ошибка разбора ответа сервера' } };
+    }
 }
 
 async function apiPost(url, body = {}, method = 'POST') {
@@ -1010,8 +1014,8 @@ async function loadEnhancedOrders() {
         if (typeFilter) url += '&order_type=' + encodeURIComponent(typeFilter);
         if (search) url += '&search=' + encodeURIComponent(search);
         
-        const orders = await apiGet(url);
-        const ordersList = Array.isArray(orders) ? orders : [];
+        const resp = await apiGet(url);
+        const ordersList = Array.isArray(resp.data) ? resp.data : [];
         
         // Update stats
         document.getElementById('stat-total-orders').textContent = ordersList.length;
@@ -1111,7 +1115,8 @@ async function loadEnhancedOrders() {
 
 async function viewOrderDetails(orderId) {
     try {
-        const order = await apiGet(`/admin/api/orders/${orderId}`);
+        const resp = await apiGet(`/admin/api/orders/${orderId}`);
+        const order = resp.data;
         const content = document.getElementById('order-details-content');
         
         let html = '<div class="json-viewer">' + JSON.stringify(order, null, 2) + '</div>';
@@ -1220,8 +1225,8 @@ async function loadWebhookEvents() {
         if (statusFilter) url += '&processed=' + encodeURIComponent(statusFilter);
         if (search) url += '&search=' + encodeURIComponent(search);
         
-        const events = await apiGet(url);
-        const eventsList = Array.isArray(events) ? events : [];
+        const resp = await apiGet(url);
+        const eventsList = Array.isArray(resp.data) ? resp.data : [];
         
         // Update stats
         document.getElementById('stat-total-webhooks').textContent = eventsList.length;
@@ -1280,8 +1285,9 @@ async function loadWebhookEvents() {
 
 async function viewWebhookDetails(eventId) {
     try {
-        const events = await apiGet('/admin/api/webhooks/events?limit=100');
-        const event = events.find(e => e.id === eventId);
+        const resp = await apiGet('/admin/api/webhooks/events?limit=100');
+        const allEvents = Array.isArray(resp.data) ? resp.data : [];
+        const event = allEvents.find(e => e.id === eventId);
         if (!event) {
             alert('Событие не найдено');
             return;
@@ -1318,8 +1324,8 @@ async function loadCourierStats() {
     container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>';
     
     try {
-        const orders = await apiGet('/admin/api/orders?limit=1000');
-        const ordersList = Array.isArray(orders) ? orders : [];
+        const resp = await apiGet('/admin/api/orders?limit=1000');
+        const ordersList = Array.isArray(resp.data) ? resp.data : [];
         
         // Group by courier
         const courierMap = {};
@@ -1392,8 +1398,8 @@ async function loadBonusTransactions() {
         if (typeFilter) url += '&operation_type=' + encodeURIComponent(typeFilter);
         if (search) url += '&search=' + encodeURIComponent(search);
         
-        const transactions = await apiGet(url);
-        const txList = Array.isArray(transactions) ? transactions : [];
+        const resp = await apiGet(url);
+        const txList = Array.isArray(resp.data) ? resp.data : [];
         
         if (txList.length === 0) {
             container.innerHTML = '<span class="badge badge-muted">Транзакций не найдено</span>';
@@ -1455,9 +1461,10 @@ async function loadOutgoingWebhooks() {
     container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>';
     
     try {
-        const webhooks = await apiGet('/admin/api/outgoing-webhooks');
+        const resp = await apiGet('/admin/api/outgoing-webhooks');
+        const webhooks = Array.isArray(resp.data) ? resp.data : [];
         
-        if (!Array.isArray(webhooks) || webhooks.length === 0) {
+        if (webhooks.length === 0) {
             container.innerHTML = '<span class="badge badge-muted">Исходящие вебхуки не настроены</span>';
             return;
         }
@@ -1532,9 +1539,10 @@ async function loadOutgoingWebhookLogs() {
         if (webhookFilter) url += '&webhook_id=' + webhookFilter;
         if (statusFilter) url += '&success=' + statusFilter;
         
-        const logs = await apiGet(url);
+        const resp = await apiGet(url);
+        const logs = Array.isArray(resp.data) ? resp.data : [];
         
-        if (!Array.isArray(logs) || logs.length === 0) {
+        if (logs.length === 0) {
             container.innerHTML = '<span class="badge badge-muted">Логов не найдено</span>';
             return;
         }
@@ -1620,7 +1628,8 @@ function openOutgoingWebhookModal(webhookId = null) {
 
 async function editOutgoingWebhook(webhookId) {
     try {
-        const webhook = await apiGet(`/admin/api/outgoing-webhooks/${webhookId}`);
+        const resp = await apiGet(`/admin/api/outgoing-webhooks/${webhookId}`);
+        const webhook = resp.data;
         
         document.getElementById('outgoing-webhook-id').value = webhook.id;
         document.getElementById('outgoing-webhook-name').value = webhook.name;
@@ -1757,16 +1766,16 @@ async function loadSetupTab() {
 
 async function loadSetupSettings() {
     try {
-        const settings = await apiGet('/admin/api/iiko-settings');
+        const resp = await apiGet('/admin/api/iiko-settings');
         
-        if (settings?.error || settings?.detail) {
+        if (resp.status >= 400 || resp.data?.error || resp.data?.detail) {
             document.getElementById('setup-setting-info').innerHTML = 
-                '<div class="alert alert-danger">❌ ' + escapeHtml(settings.error || settings.detail) + '</div>';
+                '<div class="alert alert-danger">❌ ' + escapeHtml(resp.data?.error || resp.data?.detail || 'Ошибка загрузки настроек') + '</div>';
             setupSettingsList = [];
             return;
         }
         
-        setupSettingsList = Array.isArray(settings) ? settings : (Array.isArray(settings?.data) ? settings.data : []);
+        setupSettingsList = Array.isArray(resp.data) ? resp.data : [];
         
         const select = document.getElementById('setup-setting-select');
         select.innerHTML = '';
@@ -1995,10 +2004,10 @@ async function loadIikoWebhookSettings() {
     
     try {
         const result = await apiGet(`/admin/api/webhooks/settings?setting_id=${setupCurrentSettingId}`);
-        const data = result.data || result;
+        const data = result.data;
         
-        if (data.error || data.detail) {
-            container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(data.error || data.detail) + '</div>';
+        if (result.status >= 400 || data?.error || data?.detail) {
+            container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(data?.error || data?.detail || 'Ошибка загрузки настроек') + '</div>';
             return;
         }
         
@@ -2051,8 +2060,8 @@ async function loadIikoWebhookSettings() {
 async function loadWebhookSetupStats() {
     try {
         let url = '/admin/api/webhooks/events?limit=100';
-        const events = await apiGet(url);
-        const eventsList = Array.isArray(events) ? events : [];
+        const resp = await apiGet(url);
+        const eventsList = Array.isArray(resp.data) ? resp.data : [];
         
         document.getElementById('stat-setup-total').textContent = eventsList.length;
         document.getElementById('stat-setup-processed').textContent = eventsList.filter(e => e.processed).length;

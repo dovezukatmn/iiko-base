@@ -852,11 +852,29 @@ async def iiko_webhook(request: Request, db: Session = Depends(get_db)):
 async def get_webhook_events(
     skip: int = 0,
     limit: int = 50,
+    event_type: Optional[str] = None,
+    processed: Optional[str] = None,
+    search: Optional[str] = None,
     db: Session = Depends(get_db),
     _current_user: User = Depends(require_role("manager")),
 ):
     """Получить историю вебхук-событий"""
-    return db.query(WebhookEvent).order_by(WebhookEvent.created_at.desc()).offset(skip).limit(limit).all()
+    query = db.query(WebhookEvent)
+    if event_type:
+        query = query.filter(WebhookEvent.event_type == event_type)
+    if processed is not None and processed != '':
+        if processed.lower() in ('true', '1'):
+            query = query.filter(WebhookEvent.processed == True)
+        elif processed.lower() in ('false', '0'):
+            query = query.filter(WebhookEvent.processed == False)
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.filter(
+            (WebhookEvent.order_external_id.ilike(search_pattern)) |
+            (WebhookEvent.organization_id.ilike(search_pattern)) |
+            (WebhookEvent.event_type.ilike(search_pattern))
+        )
+    return query.order_by(WebhookEvent.created_at.desc()).offset(skip).limit(limit).all()
 
 
 # ─── Order Management (двусторонняя интеграция с iiko) ──────────────────
