@@ -14,7 +14,7 @@ from sqlalchemy import func as sa_func
 from typing import List as TypingList, Optional
 from database.connection import get_db
 from database.models import (
-    MenuItem, User, IikoSettings, Order, WebhookEvent, ApiLog, BonusTransaction,
+    MenuItem, User, IikoSettings, Order, WebhookEvent, ApiLog, BonusTransaction, WebhookConfig,
 )
 from app.schemas import (
     UserCreate, UserLogin, UserResponse, Token, RoleUpdate,
@@ -553,10 +553,231 @@ async def get_order(
 
 
 # ─── Webhooks ────────────────────────────────────────────────────────────
+
+# SOI API статусы заказов (из официальной документации)
+# https://github.com/iiko/front.api.doc/blob/master/v6/en/Statuses.md
+IIKO_ORDER_STATUSES = [
+    "Unconfirmed", "WaitCooking", "ReadyForCooking", "CookingStarted",
+    "CookingCompleted", "Waiting", "OnWay", "Delivered", "Closed", "Cancelled"
+]
+
+# Маппинг статусов для единообразной обработки
+STATUS_MAPPING = {
+    "WAIT_COOKING": "WaitCooking",
+    "READY_FOR_COOKING": "ReadyForCooking", 
+    "COOKING_STARTED": "CookingStarted",
+    "COOKING_COMPLETED": "CookingCompleted",
+    "WAITING": "Waiting",
+    "ON_WAY": "OnWay",
+    "DELIVERED": "Delivered",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled",
+    "Unconfirmed": "Unconfirmed",
+}
+
+
+async def process_soi_webhook_event(event_id: int, db: Session):
+    """
+    Асинхронная обработка события вебхука SOI API.
+    Вызывается в фоне для обработки CREATE/UPDATE событий.
+    """
+    try:
+        event = db.query(WebhookEvent).filter(WebhookEvent.id == event_id).first()
+        if not event or event.processed:
+            return
+
+        payload = json.loads(event.payload)
+        event_type = event.event_type
+        
+        # Обработка SOI API формата (CREATE/UPDATE)
+        if event_type in ("CREATE", "UPDATE"):
+            await process_soi_order_event(payload, db, event)
+        # Обработка Cloud API формата (DeliveryOrderUpdate, etc.)
+        elif event_type in ("DeliveryOrderUpdate", "DeliveryOrderError"):
+            await process_delivery_order_event(payload, db, event)
+        # Обработка других форматов (OrderChanged, etc.)
+        elif event_type in (WEBHOOK_EVENT_ORDER_CHANGED, WEBHOOK_EVENT_DELIVERY_ORDER_CHANGED, WEBHOOK_EVENT_ORDER):
+            await process_order_changed_event(payload, db, event)
+        # Другие события
+        elif event_type in ("StopListUpdate", "PersonalShift", "ReserveUpdate", "ReserveError", "TableOrderError"):
+            logger.info(f"Обработано событие типа {event_type}")
+            event.processed = True
+        
+        db.commit()
+        
+    except Exception as e:
+        logger.error(f"Ошибка обработки webhook события {event_id}: {e}", exc_info=True)
+        if event:
+            event.processing_error = str(e)
+            db.commit()
+
+
+async def process_soi_order_event(payload: dict, db: Session, event: WebhookEvent):
+    """
+    Обработка события заказа в формате SOI API (CREATE/UPDATE).
+    Формат согласно: https://documenter.getpostman.com/view/1488033/iiko-soi-api
+    """
+    try:
+        external_id = payload.get("orderExternalId")
+        readable_number = payload.get("readableNumber")
+        creation_status = payload.get("creationStatus")
+        error_info = payload.get("errorInfo")
+        
+        # Извлечение transaction details
+        transaction_details = payload.get("transactionDetails", {})
+        org_id = transaction_details.get("organizationId")
+        
+        # Извлечение деталей заказа iiko
+        iiko_details = payload.get("iikoOrderDetails", {})
+        iiko_order_id = iiko_details.get("iikoOrderId")
+        iiko_order_number = iiko_details.get("iikoOrderNumber")
+        restaurant_name = iiko_details.get("restaurantName")
+        order_type = iiko_details.get("orderType")
+        order_status = iiko_details.get("orderStatus")
+        received_at = iiko_details.get("receivedAt")
+        promised_time = iiko_details.get("promisedTime")
+        problem = iiko_details.get("problem")
+        order_amount = iiko_details.get("orderAmount")
+        
+        # Обновление event с деталями
+        event.order_external_id = external_id
+        event.organization_id = org_id
+        
+        # Нормализация статуса
+        normalized_status = STATUS_MAPPING.get(order_status, order_status)
+        
+        logger.info(
+            f"[SOI WEBHOOK] {event.event_type} - заказ {external_id} "
+            f"(iiko: {iiko_order_id}), статус: {normalized_status}, сумма: {order_amount}"
+        )
+        
+        # Поиск существующего заказа
+        order = None
+        if iiko_order_id:
+            order = db.query(Order).filter(Order.iiko_order_id == iiko_order_id).first()
+        if not order and external_id:
+            order = db.query(Order).filter(Order.external_order_id == external_id).first()
+        
+        if order:
+            # Обновление существующего заказа
+            order.iiko_order_id = iiko_order_id or order.iiko_order_id
+            order.external_order_id = external_id or order.external_order_id
+            order.readable_number = readable_number or order.readable_number
+            order.organization_id = org_id or order.organization_id
+            order.status = normalized_status
+            order.order_type = order_type or order.order_type
+            order.restaurant_name = restaurant_name or order.restaurant_name
+            order.problem = problem
+            order.creation_status = creation_status
+            order.error_info = json.dumps(error_info) if error_info else None
+            
+            # Обновление promised_time если есть
+            if promised_time:
+                try:
+                    from datetime import datetime
+                    order.promised_time = datetime.fromisoformat(promised_time.replace('Z', '+00:00'))
+                except:
+                    pass
+            
+            # Обновление суммы
+            if order_amount is not None:
+                # iiko API возвращает сумму в рублях с копейками
+                order.total_amount = int(order_amount * 100) if isinstance(order_amount, float) else order_amount
+            
+            # Сохранение полных данных
+            order.order_data = json.dumps(payload, ensure_ascii=False)
+            
+            logger.info(f"Обновлен заказ {order.id}: статус {normalized_status}")
+        else:
+            # Создание нового заказа (если пришел CREATE и заказа нет)
+            if event.event_type == "CREATE":
+                order = Order(
+                    iiko_order_id=iiko_order_id,
+                    external_order_id=external_id,
+                    readable_number=readable_number,
+                    organization_id=org_id,
+                    status=normalized_status,
+                    order_type=order_type,
+                    restaurant_name=restaurant_name,
+                    problem=problem,
+                    creation_status=creation_status,
+                    error_info=json.dumps(error_info) if error_info else None,
+                    total_amount=int(order_amount * 100) if order_amount else 0,
+                    order_data=json.dumps(payload, ensure_ascii=False),
+                )
+                
+                if promised_time:
+                    try:
+                        from datetime import datetime
+                        order.promised_time = datetime.fromisoformat(promised_time.replace('Z', '+00:00'))
+                    except:
+                        pass
+                
+                db.add(order)
+                logger.info(f"Создан новый заказ: external_id={external_id}, iiko_id={iiko_order_id}")
+            else:
+                logger.warning(f"Заказ {external_id} не найден для UPDATE события")
+        
+        event.processed = True
+        
+    except Exception as e:
+        logger.error(f"Ошибка обработки SOI события: {e}", exc_info=True)
+        event.processing_error = str(e)
+        raise
+
+
+async def process_delivery_order_event(payload: dict, db: Session, event: WebhookEvent):
+    """Обработка события DeliveryOrderUpdate/Error"""
+    event_info = payload.get("eventInfo", {})
+    order_id = event_info.get("id")
+    new_status = event_info.get("status", "")
+    normalized_status = STATUS_MAPPING.get(new_status, new_status)
+    
+    if order_id:
+        order = db.query(Order).filter(Order.iiko_order_id == order_id).first()
+        if order:
+            order.status = normalized_status
+            order.order_data = json.dumps(event_info, ensure_ascii=False)
+            logger.info(f"Обновлен статус заказа {order_id} -> {normalized_status}")
+        else:
+            logger.info(f"Заказ {order_id} не найден в БД, событие залогировано")
+    
+    event.processed = True
+
+
+async def process_order_changed_event(payload: dict, db: Session, event: WebhookEvent):
+    """Обработка события OrderChanged/DeliveryOrderChanged"""
+    order_data = payload.get("order") or payload.get("data") or {}
+    order_id = order_data.get("id") or order_data.get("orderId")
+    order_status = order_data.get("status") or order_data.get("orderStatus")
+    normalized_status = STATUS_MAPPING.get(order_status, order_status)
+    
+    if order_id:
+        existing_order = db.query(Order).filter(Order.iiko_order_id == order_id).first()
+        if existing_order:
+            existing_order.status = normalized_status or "unknown"
+            existing_order.order_data = json.dumps(order_data, ensure_ascii=False)
+            logger.info(f"Обновлен статус заказа {order_id} -> {normalized_status}")
+        else:
+            logger.info(f"Заказ {order_id} не найден в БД, событие залогировано")
+    
+    event.processed = True
+
+
 @api_router.post("/webhooks/iiko", tags=["webhooks"])
 async def iiko_webhook(request: Request, db: Session = Depends(get_db)):
-    """Прием вебхуков от iiko"""
-    # Проверка токена авторизации вебхука (защита от поддельных запросов)
+    """
+    Прием вебхуков от iiko (SOI API, Cloud API).
+    Поддерживает форматы:
+    - SOI API: CREATE/UPDATE события
+    - Cloud API: DeliveryOrderUpdate, DeliveryOrderError
+    - Другие: OrderChanged, StopListUpdate, etc.
+    
+    Документация:
+    - SOI API: https://documenter.getpostman.com/view/1488033/iiko-soi-api
+    - Cloud API: https://ru.iiko.help
+    """
+    # 1. Валидация токена авторизации
     auth_header = request.headers.get("Authorization") or request.headers.get("authToken") or ""
     stored_secrets = [
         s.webhook_secret
@@ -568,64 +789,44 @@ async def iiko_webhook(request: Request, db: Session = Depends(get_db)):
             logger.warning("Webhook rejected: invalid auth token")
             raise HTTPException(status_code=401, detail="Invalid webhook auth token")
 
+    # 2. Парсинг payload
     body = await request.body()
     try:
         payload = json.loads(body)
     except Exception as e:
-        logger.warning("Failed to parse webhook JSON: %s", e)
-        payload = {"raw": body.decode("utf-8", errors="replace"), "parse_error": str(e)}
+        logger.warning(f"Failed to parse webhook JSON: {e}")
+        # Возвращаем 200 OK даже при ошибке парсинга, чтобы iiko не повторял запрос
+        return {"status": "ignored", "error": "invalid_json"}
 
-    event_type = payload.get("eventType") or payload.get("type") or "unknown"
-    logger.info("Получено событие от iiko webhook: %s", event_type)
-
+    # 3. Определение типа события
+    event_type = payload.get("type") or payload.get("eventType") or "unknown"
+    
+    # 4. Извлечение метаданных для быстрого доступа
+    order_external_id = payload.get("orderExternalId")
+    org_id = None
+    if "transactionDetails" in payload:
+        org_id = payload["transactionDetails"].get("organizationId")
+    
+    logger.info(f"[WEBHOOK] Получено событие: {event_type}, external_id: {order_external_id}")
+    
+    # 5. Сохранение события в БД
     event = WebhookEvent(
         event_type=event_type,
+        order_external_id=order_external_id,
+        organization_id=org_id,
         payload=json.dumps(payload, ensure_ascii=False),
         processed=False,
     )
     db.add(event)
     db.commit()
+    db.refresh(event)
 
-    # Обработка событий по статусам заказов (eventInfo format from iiko webhooks)
-    if event_type in ("DeliveryOrderUpdate", "DeliveryOrderError"):
-        event_info = payload.get("eventInfo", {})
-        order_id = event_info.get("id")
-        new_status = event_info.get("status", "")
-        order_data = event_info
-        if order_id:
-            order = db.query(Order).filter(Order.iiko_order_id == order_id).first()
-            if order:
-                order.status = new_status
-                order.order_data = json.dumps(order_data, ensure_ascii=False)
-                logger.info("Обновлен статус заказа в БД: %s -> %s", order_id, new_status)
-            else:
-                logger.info("Заказ %s не найден в БД, событие просто залогировано", order_id)
-        event.processed = True
-        db.commit()
+    # 6. Асинхронная обработка события в фоне
+    import asyncio
+    asyncio.create_task(process_soi_webhook_event(event.id, db))
 
-    # Обработка событий в формате order/data (OrderChanged, etc.)
-    elif event_type in (WEBHOOK_EVENT_ORDER_CHANGED, WEBHOOK_EVENT_DELIVERY_ORDER_CHANGED, WEBHOOK_EVENT_ORDER):
-        order_data = payload.get("order") or payload.get("data") or {}
-        order_id = order_data.get("id") or order_data.get("orderId")
-        order_status = order_data.get("status") or order_data.get("orderStatus")
-        if order_id:
-            existing_order = db.query(Order).filter(Order.iiko_order_id == order_id).first()
-            if existing_order:
-                existing_order.status = order_status or "unknown"
-                existing_order.order_data = json.dumps(order_data, ensure_ascii=False)
-                logger.info("Обновлен статус заказа в БД: %s -> %s", order_id, order_status)
-            else:
-                logger.info("Заказ %s не найден в БД, событие просто залогировано", order_id)
-        event.processed = True
-        db.commit()
-
-    # Обработка дополнительных типов событий
-    elif event_type in ("StopListUpdate", "PersonalShift", "ReserveUpdate", "ReserveError", "TableOrderError"):
-        logger.info("Обработано событие типа %s", event_type)
-        event.processed = True
-        db.commit()
-
-    return {"status": "ok"}
+    # 7. Немедленный ответ iiko (важно для предотвращения повторных отправок)
+    return {"status": "OK"}
 
 
 @api_router.get("/webhooks/events", tags=["webhooks"], response_model=TypingList[WebhookEventResponse])
@@ -637,6 +838,224 @@ async def get_webhook_events(
 ):
     """Получить историю вебхук-событий"""
     return db.query(WebhookEvent).order_by(WebhookEvent.created_at.desc()).offset(skip).limit(limit).all()
+
+
+# ─── Order Management (двусторонняя интеграция с iiko) ──────────────────
+@api_router.post("/orders/{order_id}/update-status", tags=["orders"])
+async def update_order_status_in_iiko(
+    order_id: int,
+    status: str,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """
+    Обновить статус заказа в iiko.
+    Статусы: Unconfirmed, WaitCooking, ReadyForCooking, CookingStarted,
+    CookingCompleted, Waiting, OnWay, Delivered, Closed, Cancelled
+    """
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Заказ не найден")
+    
+    if not order.iiko_order_id:
+        raise HTTPException(status_code=400, detail="Заказ не имеет iiko_order_id")
+    
+    # Получаем настройки iiko для организации
+    iiko_setting = db.query(IikoSettings).filter(
+        IikoSettings.organization_id == order.organization_id,
+        IikoSettings.is_active == True
+    ).first()
+    
+    if not iiko_setting:
+        raise HTTPException(status_code=400, detail="Настройки iiko не найдены для организации")
+    
+    service = IikoService(db, iiko_setting)
+    
+    try:
+        result = await service.update_order_status(
+            order.organization_id,
+            order.iiko_order_id,
+            status
+        )
+        
+        # Обновляем локальный статус
+        order.status = status
+        db.commit()
+        
+        return {"status": "success", "result": result}
+    except Exception as e:
+        logger.error(f"Ошибка обновления статуса заказа в iiko: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/orders/{order_id}/assign-courier", tags=["orders"])
+async def assign_courier_to_order(
+    order_id: int,
+    courier_id: str,
+    courier_name: str = None,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Назначить курьера на заказ в iiko"""
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Заказ не найден")
+    
+    if not order.iiko_order_id:
+        raise HTTPException(status_code=400, detail="Заказ не имеет iiko_order_id")
+    
+    iiko_setting = db.query(IikoSettings).filter(
+        IikoSettings.organization_id == order.organization_id,
+        IikoSettings.is_active == True
+    ).first()
+    
+    if not iiko_setting:
+        raise HTTPException(status_code=400, detail="Настройки iiko не найдены")
+    
+    service = IikoService(db, iiko_setting)
+    
+    try:
+        result = await service.assign_courier(
+            order.organization_id,
+            order.iiko_order_id,
+            courier_id
+        )
+        
+        # Обновляем локальные данные курьера
+        order.courier_id = courier_id
+        order.courier_name = courier_name or courier_id
+        db.commit()
+        
+        return {"status": "success", "result": result}
+    except Exception as e:
+        logger.error(f"Ошибка назначения курьера в iiko: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/orders/{order_id}/update-payment", tags=["orders"])
+async def update_order_payment(
+    order_id: int,
+    payments: list,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """
+    Изменить способ оплаты заказа в iiko.
+    
+    Пример payments: [{"paymentTypeKind": "Card", "sum": 1200.0}]
+    """
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Заказ не найден")
+    
+    if not order.iiko_order_id:
+        raise HTTPException(status_code=400, detail="Заказ не имеет iiko_order_id")
+    
+    iiko_setting = db.query(IikoSettings).filter(
+        IikoSettings.organization_id == order.organization_id,
+        IikoSettings.is_active == True
+    ).first()
+    
+    if not iiko_setting:
+        raise HTTPException(status_code=400, detail="Настройки iiko не найдены")
+    
+    service = IikoService(db, iiko_setting)
+    
+    try:
+        result = await service.change_order_payment(
+            order.organization_id,
+            order.iiko_order_id,
+            payments
+        )
+        
+        return {"status": "success", "result": result}
+    except Exception as e:
+        logger.error(f"Ошибка изменения оплаты в iiko: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/orders/{order_id}/apply-discount", tags=["orders"])
+async def apply_discount(
+    order_id: int,
+    discount_id: str = None,
+    discount_sum: float = None,
+    discount_percent: float = None,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Применить скидку к заказу в iiko"""
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Заказ не найден")
+    
+    if not order.iiko_order_id:
+        raise HTTPException(status_code=400, detail="Заказ не имеет iiko_order_id")
+    
+    iiko_setting = db.query(IikoSettings).filter(
+        IikoSettings.organization_id == order.organization_id,
+        IikoSettings.is_active == True
+    ).first()
+    
+    if not iiko_setting:
+        raise HTTPException(status_code=400, detail="Настройки iiko не найдены")
+    
+    service = IikoService(db, iiko_setting)
+    
+    try:
+        result = await service.apply_discount_to_order(
+            order.organization_id,
+            order.iiko_order_id,
+            discount_id,
+            discount_sum,
+            discount_percent
+        )
+        
+        return {"status": "success", "result": result}
+    except Exception as e:
+        logger.error(f"Ошибка применения скидки в iiko: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/orders/{order_id}/cancel", tags=["orders"])
+async def cancel_order_in_iiko(
+    order_id: int,
+    cancel_reason: str = "",
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Отменить заказ в iiko"""
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Заказ не найден")
+    
+    if not order.iiko_order_id:
+        raise HTTPException(status_code=400, detail="Заказ не имеет iiko_order_id")
+    
+    iiko_setting = db.query(IikoSettings).filter(
+        IikoSettings.organization_id == order.organization_id,
+        IikoSettings.is_active == True
+    ).first()
+    
+    if not iiko_setting:
+        raise HTTPException(status_code=400, detail="Настройки iiko не найдены")
+    
+    service = IikoService(db, iiko_setting)
+    
+    try:
+        result = await service.cancel_order(
+            order.organization_id,
+            order.iiko_order_id,
+            cancel_reason
+        )
+        
+        # Обновляем локальный статус
+        order.status = "Cancelled"
+        db.commit()
+        
+        return {"status": "success", "result": result}
+    except Exception as e:
+        logger.error(f"Ошибка отмены заказа в iiko: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ─── API Logs ────────────────────────────────────────────────────────────

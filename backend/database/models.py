@@ -58,13 +58,23 @@ class Order(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     iiko_order_id = Column(String(255), unique=True, nullable=True, index=True)
+    external_order_id = Column(String(255), nullable=True, index=True)  # orderExternalId from SOI webhook
+    readable_number = Column(String(100), nullable=True)  # readableNumber from SOI webhook
     organization_id = Column(String(255), nullable=True)
     status = Column(String(50), default="new")
     customer_name = Column(String(255), nullable=True)
     customer_phone = Column(String(50), nullable=True)
     delivery_address = Column(Text, nullable=True)
     total_amount = Column(Integer, default=0)
-    order_data = Column(Text, nullable=True)
+    promised_time = Column(DateTime(timezone=True), nullable=True)  # promisedTime from webhook
+    courier_id = Column(String(255), nullable=True)  # ID курьера
+    courier_name = Column(String(255), nullable=True)  # Имя курьера
+    order_type = Column(String(50), nullable=True)  # DELIVERY, PICKUP, etc.
+    restaurant_name = Column(String(255), nullable=True)  # restaurantName from webhook
+    problem = Column(Text, nullable=True)  # описание проблемы заказа
+    creation_status = Column(String(50), nullable=True)  # OK, Error from SOI
+    error_info = Column(Text, nullable=True)  # errorInfo from SOI
+    order_data = Column(Text, nullable=True)  # Полные данные заказа в JSON
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -74,9 +84,12 @@ class WebhookEvent(Base):
     __tablename__ = "webhook_events"
     
     id = Column(Integer, primary_key=True, index=True)
-    event_type = Column(String(100), nullable=False, index=True)
+    event_type = Column(String(100), nullable=False, index=True)  # CREATE, UPDATE, etc.
+    order_external_id = Column(String(255), nullable=True, index=True)  # для быстрого поиска
+    organization_id = Column(String(255), nullable=True, index=True)
     payload = Column(Text, nullable=True)
-    processed = Column(Boolean, default=False)
+    processed = Column(Boolean, default=False, index=True)
+    processing_error = Column(Text, nullable=True)  # ошибки обработки
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -111,3 +124,19 @@ class BonusTransaction(Base):
     order_id = Column(String(255), nullable=True, index=True)
     performed_by = Column(String(100), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class WebhookConfig(Base):
+    """Конфигурация вебхуков для разных организаций"""
+    __tablename__ = "webhook_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(String(255), nullable=False, index=True)
+    webhook_url = Column(String(500), nullable=False)
+    auth_token = Column(String(255), nullable=True)
+    is_active = Column(Boolean, default=True, index=True)
+    last_registration = Column(DateTime(timezone=True), nullable=True)
+    registration_status = Column(String(50), nullable=True)
+    registration_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())

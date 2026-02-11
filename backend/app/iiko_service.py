@@ -329,6 +329,143 @@ class IikoService:
             json_data={"organizationId": organization_id},
         )
 
+    # ─── Order Management (двусторонняя интеграция) ─────────────────────────
+    async def update_order_status(self, organization_id: str, order_id: str, status: str) -> dict:
+        """
+        Обновить статус заказа в iiko.
+        Используется для отправки изменений статуса из админки обратно в iiko.
+        """
+        if not self._token:
+            await self.authenticate()
+        return await self._request(
+            "POST",
+            "/deliveries/update_order_problem",
+            json_data={
+                "organizationId": organization_id,
+                "orderId": order_id,
+                "problem": None if status == "Delivered" else "",
+                "problemComment": f"Status updated to {status}",
+            },
+        )
+
+    async def assign_courier(self, organization_id: str, order_id: str, courier_id: str) -> dict:
+        """
+        Назначить курьера на заказ в iiko.
+        Используется для синхронизации назначения курьера.
+        """
+        if not self._token:
+            await self.authenticate()
+        return await self._request(
+            "POST",
+            "/deliveries/update_order_courier",
+            json_data={
+                "organizationId": organization_id,
+                "orderId": order_id,
+                "courierId": courier_id,
+            },
+        )
+
+    async def update_order_items(self, organization_id: str, order_id: str, items: list) -> dict:
+        """
+        Обновить состав заказа (позиции) в iiko.
+        Используется для изменения блюд, модификаторов в заказе.
+        """
+        if not self._token:
+            await self.authenticate()
+        return await self._request(
+            "POST",
+            "/deliveries/update_order_items",
+            json_data={
+                "organizationId": organization_id,
+                "orderId": order_id,
+                "items": items,
+            },
+        )
+
+    async def change_order_payment(
+        self, 
+        organization_id: str, 
+        order_id: str, 
+        payments: list
+    ) -> dict:
+        """
+        Изменить способ оплаты заказа в iiko.
+        
+        Args:
+            organization_id: ID организации
+            order_id: ID заказа в iiko
+            payments: Список платежей, например:
+                [{"paymentTypeKind": "Card", "sum": 1200.0}]
+        """
+        if not self._token:
+            await self.authenticate()
+        return await self._request(
+            "POST",
+            "/deliveries/update_order_payments",
+            json_data={
+                "organizationId": organization_id,
+                "orderId": order_id,
+                "payments": payments,
+            },
+        )
+
+    async def apply_discount_to_order(
+        self,
+        organization_id: str,
+        order_id: str,
+        discount_id: str = None,
+        discount_sum: float = None,
+        discount_percent: float = None
+    ) -> dict:
+        """
+        Применить скидку к заказу в iiko.
+        
+        Args:
+            organization_id: ID организации
+            order_id: ID заказа
+            discount_id: ID скидки из номенклатуры iiko
+            discount_sum: Сумма скидки (фиксированная)
+            discount_percent: Процент скидки
+        """
+        if not self._token:
+            await self.authenticate()
+        
+        discount_data = {"organizationId": organization_id, "orderId": order_id}
+        
+        if discount_id:
+            discount_data["discountId"] = discount_id
+        if discount_sum is not None:
+            discount_data["sum"] = discount_sum
+        if discount_percent is not None:
+            discount_data["percent"] = discount_percent
+        
+        return await self._request(
+            "POST",
+            "/deliveries/apply_discount",
+            json_data=discount_data,
+        )
+
+    async def cancel_order(self, organization_id: str, order_id: str, cancel_reason: str = "") -> dict:
+        """
+        Отменить заказ в iiko.
+        
+        Args:
+            organization_id: ID организации
+            order_id: ID заказа в iiko
+            cancel_reason: Причина отмены
+        """
+        if not self._token:
+            await self.authenticate()
+        return await self._request(
+            "POST",
+            "/deliveries/cancel",
+            json_data={
+                "organizationId": organization_id,
+                "orderId": order_id,
+                "cancelCause": cancel_reason or "Cancelled from admin panel",
+            },
+        )
+
     # ─── Loyalty / iikoCard ─────────────────────────────────────────────────
     async def get_loyalty_programs(self, organization_id: str) -> dict:
         """Получить список программ лояльности (бонусных программ)"""
