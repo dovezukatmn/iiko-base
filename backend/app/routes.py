@@ -736,10 +736,6 @@ async def process_soi_order_event(payload: dict, db: Session, event: WebhookEven
                 await webhook_service.send_order_webhook(order, "order.updated")
         
         event.processed = True
-            else:
-                logger.warning(f"Заказ {external_id} не найден для UPDATE события")
-        
-        event.processed = True
         
     except Exception as e:
         logger.error(f"Ошибка обработки SOI события: {e}", exc_info=True)
