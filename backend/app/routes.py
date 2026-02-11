@@ -51,6 +51,9 @@ DEFAULT_DELIVERY_STATUSES_STR = ",".join(DEFAULT_DELIVERY_STATUSES)
 # Statuses excluded during retry to reduce data volume
 HEAVY_DELIVERY_STATUSES = {"Closed", "Cancelled", "Delivered"}
 
+# Delivery statuses that can be updated via /deliveries/update_order_delivery_status (per iiko API docs)
+DELIVERY_STATUS_UPDATE_ALLOWED = {"Waiting", "OnWay", "Delivered"}
+
 # ─── Auth ────────────────────────────────────────────────────────────────
 @api_router.post("/auth/register", tags=["auth"], response_model=UserResponse)
 async def register(user_in: UserCreate, db: Session = Depends(get_db)):
@@ -891,8 +894,6 @@ async def update_order_status_in_iiko(
     Waiting, OnWay, Delivered.
     Для остальных статусов используется update_order_problem.
     """
-    DELIVERY_STATUS_UPDATE_ALLOWED = {"Waiting", "OnWay", "Delivered"}
-    
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Заказ не найден")

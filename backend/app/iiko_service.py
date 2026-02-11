@@ -832,17 +832,36 @@ class IikoService:
         )
 
     async def get_menu_v2(self, organization_id: str, start_revision: int = None) -> dict:
-        """Получить меню версии 2 (расширенная номенклатура)"""
+        """Получить меню версии 2 (расширенная номенклатура).
+        Использует /api/2/menu вместо стандартного /api/1/nomenclature.
+        Строит URL от базового домена, а не от base_url (который содержит /api/1).
+        """
         if not self._token:
             await self.authenticate()
         payload = {"organizationId": organization_id}
         if start_revision is not None:
             payload["startRevision"] = start_revision
-        return await self._request(
-            "POST",
-            "/api/2/menu",  # Note: v2 menu endpoint
-            json_data=payload,
-        )
+        # base_url заканчивается на /api/1 — нужно заменить на /api/2
+        base_v2 = self.base_url.replace("/api/1", "/api/2")
+        url = f"{base_v2}/menu"
+        req_body = json.dumps(payload)
+        hdrs = {
+            "Content-Type": "application/json",
+            "Timeout": "45",
+            "Authorization": f"Bearer {self._token}",
+        }
+        start = time.time()
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, json=payload, headers=hdrs)
+        duration = int((time.time() - start) * 1000)
+        resp_text = response.text
+        self._log_request("POST", url, req_body, response.status_code, resp_text, duration)
+        if response.status_code >= 400:
+            raise Exception(f"iiko API error {response.status_code}: {resp_text}")
+        try:
+            return response.json()
+        except Exception:
+            return resp_text
 
     async def get_command_status(self, organization_id: str, correlation_id: str) -> dict:
         """Получить статус выполнения команды по correlationId"""
