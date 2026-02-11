@@ -15,6 +15,7 @@ from typing import List as TypingList, Optional
 from database.connection import get_db
 from database.models import (
     MenuItem, User, IikoSettings, Order, WebhookEvent, ApiLog, BonusTransaction, WebhookConfig,
+    OutgoingWebhook, OutgoingWebhookLog,
 )
 from app.schemas import (
     UserCreate, UserLogin, UserResponse, Token, RoleUpdate,
@@ -23,6 +24,8 @@ from app.schemas import (
     WebhookEventResponse, ApiLogResponse,
     CustomerSearch, CustomerCreate, LoyaltyBalanceOperation,
     AdminUserCreate, BonusTransactionResponse,
+    OutgoingWebhookCreate, OutgoingWebhookUpdate, OutgoingWebhookResponse,
+    OutgoingWebhookLogResponse,
 )
 from app.auth import (
     get_password_hash, verify_password, create_access_token,
@@ -2214,3 +2217,142 @@ async def get_stop_lists(
             for row in rows
         ]
     }
+
+
+# ─── Outgoing Webhooks Management ────────────────────────────────────────
+
+@api_router.get("/outgoing-webhooks", response_model=TypingList[OutgoingWebhookResponse], tags=["webhooks"])
+async def list_outgoing_webhooks(
+    is_active: Optional[bool] = None,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Получить список исходящих вебхуков"""
+    query = db.query(OutgoingWebhook)
+    
+    if is_active is not None:
+        query = query.filter(OutgoingWebhook.is_active == is_active)
+    
+    webhooks = query.order_by(OutgoingWebhook.created_at.desc()).all()
+    return webhooks
+
+
+@api_router.get("/outgoing-webhooks/{webhook_id}", response_model=OutgoingWebhookResponse, tags=["webhooks"])
+async def get_outgoing_webhook(
+    webhook_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Получить исходящий вебхук по ID"""
+    webhook = db.query(OutgoingWebhook).filter(OutgoingWebhook.id == webhook_id).first()
+    if not webhook:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+    return webhook
+
+
+@api_router.post("/outgoing-webhooks", response_model=OutgoingWebhookResponse, tags=["webhooks"])
+async def create_outgoing_webhook(
+    webhook_data: OutgoingWebhookCreate,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("manager")),
+):
+    """Создать новый исходящий вебхук"""
+    webhook = OutgoingWebhook(**webhook_data.dict())
+    db.add(webhook)
+    db.commit()
+    db.refresh(webhook)
+    return webhook
+
+
+@api_router.put("/outgoing-webhooks/{webhook_id}", response_model=OutgoingWebhookResponse, tags=["webhooks"])
+async def update_outgoing_webhook(
+    webhook_id: int,
+    webhook_data: OutgoingWebhookUpdate,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("manager")),
+):
+    """Обновить исходящий вебхук"""
+    webhook = db.query(OutgoingWebhook).filter(OutgoingWebhook.id == webhook_id).first()
+    if not webhook:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+    
+    update_data = webhook_data.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(webhook, field, value)
+    
+    db.commit()
+    db.refresh(webhook)
+    return webhook
+
+
+@api_router.delete("/outgoing-webhooks/{webhook_id}", tags=["webhooks"])
+async def delete_outgoing_webhook(
+    webhook_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("manager")),
+):
+    """Удалить исходящий вебхук"""
+    webhook = db.query(OutgoingWebhook).filter(OutgoingWebhook.id == webhook_id).first()
+    if not webhook:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+    
+    db.delete(webhook)
+    db.commit()
+    return {"success": True, "message": "Webhook deleted"}
+
+
+@api_router.post("/outgoing-webhooks/{webhook_id}/test", tags=["webhooks"])
+async def test_outgoing_webhook(
+    webhook_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Тестировать исходящий вебхук"""
+    from app.outgoing_webhook_service import OutgoingWebhookService
+    
+    service = OutgoingWebhookService(db)
+    result = await service.test_webhook(webhook_id)
+    return result
+
+
+@api_router.get("/outgoing-webhooks/{webhook_id}/logs", response_model=TypingList[OutgoingWebhookLogResponse], tags=["webhooks"])
+async def get_outgoing_webhook_logs(
+    webhook_id: int,
+    limit: int = 100,
+    success: Optional[bool] = None,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Получить логи отправок исходящего вебхука"""
+    query = db.query(OutgoingWebhookLog).filter(
+        OutgoingWebhookLog.webhook_id == webhook_id
+    )
+    
+    if success is not None:
+        query = query.filter(OutgoingWebhookLog.success == success)
+    
+    logs = query.order_by(OutgoingWebhookLog.created_at.desc()).limit(limit).all()
+    return logs
+
+
+@api_router.get("/outgoing-webhook-logs", response_model=TypingList[OutgoingWebhookLogResponse], tags=["webhooks"])
+async def get_all_outgoing_webhook_logs(
+    limit: int = 100,
+    success: Optional[bool] = None,
+    webhook_id: Optional[int] = None,
+    order_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_role("operator")),
+):
+    """Получить все логи исходящих вебхуков с фильтрами"""
+    query = db.query(OutgoingWebhookLog)
+    
+    if success is not None:
+        query = query.filter(OutgoingWebhookLog.success == success)
+    if webhook_id is not None:
+        query = query.filter(OutgoingWebhookLog.webhook_id == webhook_id)
+    if order_id is not None:
+        query = query.filter(OutgoingWebhookLog.order_id == order_id)
+    
+    logs = query.order_by(OutgoingWebhookLog.created_at.desc()).limit(limit).all()
+    return logs
