@@ -718,6 +718,8 @@ async def process_soi_order_event(payload: dict, db: Session, event: WebhookEven
                 
                 db.add(order)
                 logger.info(f"Создан новый заказ: external_id={external_id}, iiko_id={iiko_order_id}")
+            else:
+                logger.warning(f"Заказ {external_id} не найден для UPDATE события")
         
         # Сохраняем изменения в БД
         db.commit()
@@ -734,10 +736,6 @@ async def process_soi_order_event(payload: dict, db: Session, event: WebhookEven
                 await webhook_service.send_order_webhook(order, "order.created")
             elif event.event_type == "UPDATE":
                 await webhook_service.send_order_webhook(order, "order.updated")
-        
-        event.processed = True
-            else:
-                logger.warning(f"Заказ {external_id} не найден для UPDATE события")
         
         event.processed = True
         

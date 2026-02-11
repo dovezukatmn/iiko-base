@@ -6,7 +6,141 @@
 @section('styles')
 <style>
     .section-gap { margin-bottom: 20px; }
-    
+
+    /* Webhook Setup Card */
+    .webhook-setup-status {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 20px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+    }
+    .webhook-setup-status.connected {
+        background: rgba(34,197,94,0.1);
+        border: 1px solid rgba(34,197,94,0.3);
+    }
+    .webhook-setup-status.disconnected {
+        background: rgba(245,158,11,0.1);
+        border: 1px solid rgba(245,158,11,0.3);
+    }
+    .webhook-setup-status.error {
+        background: rgba(239,68,68,0.1);
+        border: 1px solid rgba(239,68,68,0.3);
+    }
+    .webhook-setup-status .status-icon {
+        font-size: 28px;
+        flex-shrink: 0;
+    }
+    .webhook-setup-status .status-text {
+        flex: 1;
+    }
+    .webhook-setup-status .status-title {
+        font-weight: 700;
+        font-size: 15px;
+        color: var(--text-bright);
+        margin-bottom: 2px;
+    }
+    .webhook-setup-status .status-subtitle {
+        font-size: 12px;
+        color: var(--muted);
+    }
+    .webhook-info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+    .webhook-info-item {
+        padding: 14px;
+        border-radius: 10px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid var(--border);
+    }
+    .webhook-info-item .info-label {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+        margin-bottom: 6px;
+    }
+    .webhook-info-item .info-value {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-bright);
+        word-break: break-all;
+        font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+    .webhook-info-item .info-value.accent { color: var(--accent-light); }
+    .webhook-info-item .info-value.accent2 { color: var(--accent-2); }
+    .setup-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 16px;
+    }
+    .btn-lg {
+        padding: 12px 28px;
+        font-size: 15px;
+        font-weight: 700;
+        border-radius: 10px;
+    }
+    .webhook-events-summary {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 16px;
+    }
+    .event-stat-card {
+        flex: 1;
+        min-width: 120px;
+        padding: 12px;
+        border-radius: 10px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid var(--border);
+        text-align: center;
+    }
+    .event-stat-card .stat-num {
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--text-bright);
+    }
+    .event-stat-card .stat-label {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 2px;
+    }
+    .iiko-settings-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 8px;
+        background: rgba(99,102,241,0.1);
+        border: 1px solid rgba(99,102,241,0.3);
+        font-size: 12px;
+        color: var(--accent-light);
+        font-weight: 600;
+    }
+    .webhook-filter-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 8px;
+        margin-top: 12px;
+    }
+    .webhook-filter-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 8px;
+        background: rgba(34,197,94,0.06);
+        border: 1px solid rgba(34,197,94,0.15);
+        font-size: 12px;
+        color: var(--text);
+    }
+    .webhook-filter-item .check-icon { color: var(--success); font-weight: 700; }
+
     /* Webhook Event Cards */
     .webhook-card {
         padding: 14px;
@@ -267,15 +401,167 @@
 @section('content')
 {{-- Tab Bar --}}
 <div class="tab-bar">
-    <button class="tab-btn active" onclick="switchTab('orders', event)">📦 Заказы</button>
+    <button class="tab-btn active" onclick="switchTab('setup', event)">⚙️ Настройка Вебхука</button>
+    <button class="tab-btn" onclick="switchTab('orders', event)">📦 Заказы</button>
     <button class="tab-btn" onclick="switchTab('webhooks', event)">🔗 История Вебхуков</button>
     <button class="tab-btn" onclick="switchTab('outgoing', event)">📤 Исходящие Вебхуки</button>
     <button class="tab-btn" onclick="switchTab('couriers', event)">🚗 Курьеры</button>
     <button class="tab-btn" onclick="switchTab('bonuses', event)">🎁 Бонусы</button>
 </div>
 
+{{-- ═══ TAB: Webhook Setup ═══ --}}
+<div class="tab-content active" id="tab-setup">
+    {{-- Connection Status --}}
+    <div id="webhook-connection-status">
+        <div class="webhook-setup-status disconnected">
+            <div class="status-icon">⏳</div>
+            <div class="status-text">
+                <div class="status-title">Загрузка...</div>
+                <div class="status-subtitle">Проверка состояния вебхука</div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Active Setting Info --}}
+    <div class="card section-gap">
+        <div class="card-header">
+            <div>
+                <div class="card-title">🔑 Активная настройка iiko</div>
+                <div class="card-subtitle">Вебхук будет привязан к выбранной настройке API и организации</div>
+            </div>
+        </div>
+        <div style="padding:0 16px 16px;">
+            <div class="form-group" style="margin-bottom:12px;">
+                <label class="form-label">Настройка iiko API</label>
+                <select class="form-input" id="setup-setting-select" onchange="onSetupSettingChange()">
+                    <option value="">Загрузка...</option>
+                </select>
+            </div>
+            <div id="setup-setting-info">
+                <span class="badge badge-muted">Загрузка настроек...</span>
+            </div>
+        </div>
+    </div>
+
+    {{-- One-Click Setup --}}
+    <div class="card section-gap">
+        <div class="card-header">
+            <div>
+                <div class="card-title">🚀 Автоматическая настройка вебхука</div>
+                <div class="card-subtitle">Нажмите одну кнопку — система сама сгенерирует URL, токен и зарегистрирует вебхук в iiko Cloud</div>
+            </div>
+        </div>
+        <div style="padding:0 16px 16px;">
+            <div class="webhook-info-grid">
+                <div class="webhook-info-item">
+                    <div class="info-label">URL вебхука (генерируется автоматически)</div>
+                    <div class="info-value accent" id="setup-webhook-url">—</div>
+                </div>
+                <div class="webhook-info-item">
+                    <div class="info-label">Токен авторизации (генерируется автоматически)</div>
+                    <div class="info-value accent2" id="setup-auth-token">—</div>
+                </div>
+            </div>
+
+            <div id="setup-message" style="margin-bottom:12px;"></div>
+
+            <div class="setup-actions">
+                <button class="btn btn-primary btn-lg" id="btn-auto-setup" onclick="autoSetupWebhook()">
+                    🔗 Подключить вебхук автоматически
+                </button>
+                <button class="btn btn-lg" id="btn-check-connection" onclick="checkWebhookConnection()">
+                    🧪 Проверить подключение
+                </button>
+                <button class="btn btn-lg" id="btn-load-iiko-settings" onclick="loadIikoWebhookSettings()">
+                    📋 Настройки в iiko
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {{-- Webhook Events Summary --}}
+    <div class="card section-gap">
+        <div class="card-header">
+            <div>
+                <div class="card-title">📊 Статистика вебхука</div>
+                <div class="card-subtitle">Обзор входящих событий в реальном времени</div>
+            </div>
+            <button class="btn btn-sm" onclick="loadWebhookSetupStats()">🔄 Обновить</button>
+        </div>
+        <div style="padding:0 16px 16px;">
+            <div class="webhook-events-summary" id="setup-events-stats">
+                <div class="event-stat-card">
+                    <div class="stat-num" id="stat-setup-total">0</div>
+                    <div class="stat-label">Всего событий</div>
+                </div>
+                <div class="event-stat-card">
+                    <div class="stat-num" id="stat-setup-processed" style="color:var(--success);">0</div>
+                    <div class="stat-label">Обработано</div>
+                </div>
+                <div class="event-stat-card">
+                    <div class="stat-num" id="stat-setup-errors" style="color:var(--danger);">0</div>
+                    <div class="stat-label">Ошибки</div>
+                </div>
+                <div class="event-stat-card">
+                    <div class="stat-num" id="stat-setup-last">—</div>
+                    <div class="stat-label">Последнее событие</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Current iiko Webhook Config --}}
+    <div class="card section-gap">
+        <div class="card-header">
+            <div>
+                <div class="card-title">📡 Конфигурация в iiko Cloud</div>
+                <div class="card-subtitle">Текущие настройки вебхука, зарегистрированные в iiko</div>
+            </div>
+        </div>
+        <div style="padding:0 16px 16px;" id="iiko-cloud-webhook-config">
+            <span class="badge badge-muted">Нажмите «Настройки в iiko» для загрузки</span>
+        </div>
+    </div>
+
+    {{-- Guide --}}
+    <div class="card section-gap">
+        <div class="card-header">
+            <div>
+                <div class="card-title">📖 Как это работает</div>
+                <div class="card-subtitle">Автоматическая настройка вебхука</div>
+            </div>
+        </div>
+        <div style="padding:0 16px 16px;font-size:13px;color:var(--muted);">
+            <ol style="margin-left:20px;line-height:1.8;">
+                <li><strong>Выберите настройку iiko API</strong> с указанным Organization ID</li>
+                <li>Нажмите <strong>«Подключить вебхук автоматически»</strong></li>
+                <li>Система автоматически:
+                    <ul style="margin-left:20px;">
+                        <li>Определит домен из адресной строки вашего браузера</li>
+                        <li>Сгенерирует URL вебхука: <code>https://ваш-домен/api/v1/webhooks/iiko</code></li>
+                        <li>Сгенерирует безопасный токен авторизации</li>
+                        <li>Зарегистрирует вебхук в iiko Cloud API</li>
+                    </ul>
+                </li>
+                <li>Проверьте подключение кнопкой <strong>«Проверить подключение»</strong></li>
+            </ol>
+            <div style="margin-top:12px;padding:12px;background:rgba(99,102,241,0.08);border-radius:8px;border:1px solid rgba(99,102,241,0.2);">
+                <strong style="color:var(--accent-light);">ℹ️ Отслеживаемые события:</strong>
+                <div class="webhook-filter-list">
+                    <div class="webhook-filter-item"><span class="check-icon">✓</span> Статусы заказов доставки</div>
+                    <div class="webhook-filter-item"><span class="check-icon">✓</span> Статусы приготовления блюд</div>
+                    <div class="webhook-filter-item"><span class="check-icon">✓</span> Обновления стоп-листов</div>
+                    <div class="webhook-filter-item"><span class="check-icon">✓</span> Ошибки обработки</div>
+                    <div class="webhook-filter-item"><span class="check-icon">✓</span> Персональные смены</div>
+                    <div class="webhook-filter-item"><span class="check-icon">✓</span> Изменения курьеров</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 {{-- ═══ TAB: Enhanced Orders ═══ --}}
-<div class="tab-content active" id="tab-orders">
+<div class="tab-content" id="tab-orders">
     <div class="card section-gap">
         <div class="card-header">
             <div>
@@ -625,6 +911,9 @@
 @section('scripts')
 <script>
 const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+let setupSettingsList = [];
+let setupCurrentSettingId = null;
+let setupCurrentOrgId = null;
 
 // Tab switching
 function switchTab(name, evt) {
@@ -634,6 +923,7 @@ function switchTab(name, evt) {
     if (evt && evt.target) evt.target.classList.add('active');
     
     // Auto-load data
+    if (name === 'setup') { loadSetupTab(); }
     if (name === 'orders') loadEnhancedOrders();
     if (name === 'webhooks') loadWebhookEvents();
     if (name === 'outgoing') { loadOutgoingWebhooks(); loadOutgoingWebhookLogs(); }
@@ -1458,9 +1748,331 @@ function toggleAuthFields() {
     document.getElementById('auth-basic-group').style.display = authType === 'basic' ? 'block' : 'none';
 }
 
+// ─── Webhook Setup Tab ──────────────────────────────────────
+async function loadSetupTab() {
+    await loadSetupSettings();
+    loadWebhookSetupStats();
+    updateSetupConnectionStatus();
+}
+
+async function loadSetupSettings() {
+    try {
+        const settings = await apiGet('/admin/api/iiko-settings');
+        setupSettingsList = Array.isArray(settings) ? settings : (Array.isArray(settings?.data) ? settings.data : []);
+        
+        const select = document.getElementById('setup-setting-select');
+        select.innerHTML = '';
+        
+        if (setupSettingsList.length === 0) {
+            select.innerHTML = '<option value="">Нет настроек iiko API</option>';
+            return;
+        }
+        
+        // Auto-select: prefer with organization_id
+        if (!setupCurrentSettingId || !setupSettingsList.find(s => s.id === setupCurrentSettingId)) {
+            const withOrg = setupSettingsList.find(s => s.organization_id);
+            setupCurrentSettingId = withOrg ? withOrg.id : setupSettingsList[0].id;
+        }
+        
+        setupSettingsList.forEach(s => {
+            const orgLabel = s.organization_id ? ` (${s.organization_name || s.organization_id.substring(0, Math.min(8, s.organization_id.length)) + '...'})` : ' (нет орг.)';
+            const selected = s.id === setupCurrentSettingId ? 'selected' : '';
+            select.innerHTML += `<option value="${s.id}" ${selected}>${escapeHtml(s.name || 'API #' + s.id)}${orgLabel}</option>`;
+        });
+        
+        onSetupSettingChange();
+    } catch (err) {
+        document.getElementById('setup-setting-info').innerHTML = 
+            '<div class="alert alert-danger">❌ Ошибка загрузки настроек: ' + escapeHtml(err.message) + '</div>';
+    }
+}
+
+function onSetupSettingChange() {
+    const selectEl = document.getElementById('setup-setting-select');
+    setupCurrentSettingId = parseInt(selectEl.value) || null;
+    const setting = setupSettingsList.find(s => s.id === setupCurrentSettingId);
+    const infoEl = document.getElementById('setup-setting-info');
+    
+    if (!setting) {
+        infoEl.innerHTML = '<span class="badge badge-muted">Выберите настройку iiko API</span>';
+        return;
+    }
+    
+    setupCurrentOrgId = setting.organization_id || null;
+    
+    let html = '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">';
+    html += '<span class="iiko-settings-badge">🔑 ' + escapeHtml(setting.name || 'API #' + setting.id) + '</span>';
+    if (setting.organization_id) {
+        html += '<span class="iiko-settings-badge" style="background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.3);color:var(--success);">🏢 ' + escapeHtml(setting.organization_name || setting.organization_id.substring(0, 12) + '...') + '</span>';
+    } else {
+        html += '<span class="badge badge-warning">⚠️ Organization ID не задан — сначала выберите организацию на странице Обслуживание</span>';
+    }
+    if (setting.webhook_url) {
+        html += '<span class="iiko-settings-badge" style="background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.3);color:var(--success);">✓ Вебхук настроен</span>';
+    }
+    html += '</div>';
+    
+    infoEl.innerHTML = html;
+    
+    // Update generated URL preview
+    const domain = window.location.hostname;
+    const generatedUrl = `https://${domain}/api/v1/webhooks/iiko`;
+    document.getElementById('setup-webhook-url').textContent = setting.webhook_url || generatedUrl;
+    document.getElementById('setup-auth-token').textContent = setting.webhook_secret ? '••••••••••••••••' : '(будет сгенерирован)';
+    
+    updateSetupConnectionStatus();
+}
+
+function updateSetupConnectionStatus() {
+    const statusEl = document.getElementById('webhook-connection-status');
+    const setting = setupSettingsList.find(s => s.id === setupCurrentSettingId);
+    
+    if (!setting) {
+        statusEl.innerHTML = `
+            <div class="webhook-setup-status disconnected">
+                <div class="status-icon">⚠️</div>
+                <div class="status-text">
+                    <div class="status-title">Нет настройки iiko API</div>
+                    <div class="status-subtitle">Создайте настройку API на странице «Обслуживание»</div>
+                </div>
+            </div>`;
+        return;
+    }
+    
+    if (!setting.organization_id) {
+        statusEl.innerHTML = `
+            <div class="webhook-setup-status disconnected">
+                <div class="status-icon">⚠️</div>
+                <div class="status-text">
+                    <div class="status-title">Organization ID не задан</div>
+                    <div class="status-subtitle">Выберите организацию в настройках API на странице «Обслуживание»</div>
+                </div>
+            </div>`;
+        return;
+    }
+    
+    if (setting.webhook_url && setting.webhook_secret) {
+        statusEl.innerHTML = `
+            <div class="webhook-setup-status connected">
+                <div class="status-icon">✅</div>
+                <div class="status-text">
+                    <div class="status-title">Вебхук подключен и активен</div>
+                    <div class="status-subtitle">URL: ${escapeHtml(setting.webhook_url)}</div>
+                </div>
+            </div>`;
+    } else {
+        statusEl.innerHTML = `
+            <div class="webhook-setup-status disconnected">
+                <div class="status-icon">🔌</div>
+                <div class="status-text">
+                    <div class="status-title">Вебхук не настроен</div>
+                    <div class="status-subtitle">Нажмите «Подключить вебхук автоматически» для настройки</div>
+                </div>
+            </div>`;
+    }
+}
+
+async function autoSetupWebhook() {
+    const setting = setupSettingsList.find(s => s.id === setupCurrentSettingId);
+    const msgEl = document.getElementById('setup-message');
+    
+    if (!setting) {
+        msgEl.innerHTML = '<div class="alert alert-warning">⚠️ Выберите настройку iiko API</div>';
+        return;
+    }
+    if (!setting.organization_id) {
+        msgEl.innerHTML = '<div class="alert alert-warning">⚠️ Укажите Organization ID в настройках API на странице «Обслуживание»</div>';
+        return;
+    }
+    
+    const btn = document.getElementById('btn-auto-setup');
+    btn.disabled = true;
+    btn.textContent = '⏳ Подключение...';
+    msgEl.innerHTML = '<div style="padding:12px;background:rgba(99,102,241,0.1);border-radius:8px;display:flex;align-items:center;gap:8px;"><span class="spinner" style="width:16px;height:16px;"></span> Регистрация вебхука в iiko Cloud...</div>';
+    
+    try {
+        // Auto-detect domain from current page
+        const domain = window.location.hostname;
+        
+        const result = await apiPost('/admin/api/webhooks/register', {
+            setting_id: setupCurrentSettingId,
+            webhook_url: `https://${domain}/api/v1/webhooks/iiko`
+        });
+        
+        if (result.status >= 400) {
+            msgEl.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(result.data?.detail || JSON.stringify(result.data)) + '</div>';
+        } else {
+            const data = result.data;
+            msgEl.innerHTML = '<div class="alert alert-success">✅ Вебхук успешно зарегистрирован в iiko Cloud!</div>';
+            document.getElementById('setup-webhook-url').textContent = data.webhook_url || '—';
+            document.getElementById('setup-auth-token').textContent = data.auth_token && data.auth_token.length >= 6 ? '••••••••' + data.auth_token.substring(data.auth_token.length - 6) : '••••••••';
+            
+            // Reload settings to reflect changes
+            await loadSetupSettings();
+        }
+    } catch (err) {
+        msgEl.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '🔗 Подключить вебхук автоматически';
+    }
+}
+
+async function checkWebhookConnection() {
+    const setting = setupSettingsList.find(s => s.id === setupCurrentSettingId);
+    const msgEl = document.getElementById('setup-message');
+    
+    if (!setting) {
+        msgEl.innerHTML = '<div class="alert alert-warning">⚠️ Выберите настройку iiko API</div>';
+        return;
+    }
+    if (!setting.webhook_url) {
+        msgEl.innerHTML = '<div class="alert alert-warning">⚠️ Сначала подключите вебхук</div>';
+        return;
+    }
+    
+    const btn = document.getElementById('btn-check-connection');
+    btn.disabled = true;
+    btn.textContent = '⏳ Проверка...';
+    msgEl.innerHTML = '<div style="padding:12px;background:rgba(99,102,241,0.1);border-radius:8px;display:flex;align-items:center;gap:8px;"><span class="spinner" style="width:16px;height:16px;"></span> Тестирование вебхука...</div>';
+    
+    try {
+        const result = await apiPost('/admin/api/webhooks/test', { setting_id: setupCurrentSettingId });
+        
+        if (result.status >= 400) {
+            msgEl.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(result.data?.detail || JSON.stringify(result.data)) + '</div>';
+            updateConnectionStatusError();
+        } else {
+            const data = result.data;
+            if (data.status === 'success') {
+                msgEl.innerHTML = `<div class="alert alert-success">✅ Вебхук работает! Статус ответа: ${data.response_status}</div>`;
+            } else {
+                msgEl.innerHTML = `<div class="alert alert-danger">❌ Ошибка тестирования: ${escapeHtml(data.error || 'Нет ответа')}</div>`;
+            }
+        }
+    } catch (err) {
+        msgEl.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '🧪 Проверить подключение';
+    }
+}
+
+function updateConnectionStatusError() {
+    const statusEl = document.getElementById('webhook-connection-status');
+    statusEl.innerHTML = `
+        <div class="webhook-setup-status error">
+            <div class="status-icon">❌</div>
+            <div class="status-text">
+                <div class="status-title">Ошибка подключения</div>
+                <div class="status-subtitle">Проверьте настройки домена и доступность сервера</div>
+            </div>
+        </div>`;
+}
+
+async function loadIikoWebhookSettings() {
+    const setting = setupSettingsList.find(s => s.id === setupCurrentSettingId);
+    const container = document.getElementById('iiko-cloud-webhook-config');
+    
+    if (!setting) {
+        container.innerHTML = '<div class="alert alert-warning">⚠️ Выберите настройку iiko API</div>';
+        return;
+    }
+    if (!setting.organization_id) {
+        container.innerHTML = '<div class="alert alert-warning">⚠️ Organization ID не задан</div>';
+        return;
+    }
+    
+    container.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:8px;"><span class="spinner" style="width:16px;height:16px;"></span> Загрузка настроек из iiko Cloud...</div>';
+    
+    try {
+        const result = await apiGet(`/admin/api/webhooks/settings?setting_id=${setupCurrentSettingId}`);
+        const data = result.data || result;
+        
+        let html = '';
+        if (data.webHooksUri) {
+            html += '<div class="webhook-info-grid">';
+            html += '<div class="webhook-info-item"><div class="info-label">Webhook URL в iiko</div><div class="info-value accent">' + escapeHtml(data.webHooksUri) + '</div></div>';
+            html += '</div>';
+            
+            if (data.webHooksFilter) {
+                html += '<div style="margin-top:12px;"><strong style="font-size:13px;color:var(--text-bright);">Фильтры событий:</strong></div>';
+                
+                const filter = data.webHooksFilter;
+                html += '<div class="webhook-filter-list">';
+                
+                if (filter.deliveryOrderFilter) {
+                    const statuses = filter.deliveryOrderFilter.orderStatuses || [];
+                    html += '<div class="webhook-filter-item"><span class="check-icon">✓</span> Статусы заказов: ' + statuses.length + '</div>';
+                    const items = filter.deliveryOrderFilter.itemStatuses || [];
+                    html += '<div class="webhook-filter-item"><span class="check-icon">✓</span> Статусы блюд: ' + items.length + '</div>';
+                    if (filter.deliveryOrderFilter.errors) {
+                        html += '<div class="webhook-filter-item"><span class="check-icon">✓</span> Ошибки</div>';
+                    }
+                }
+                if (filter.stopListUpdateFilter?.updates) {
+                    html += '<div class="webhook-filter-item"><span class="check-icon">✓</span> Стоп-листы</div>';
+                }
+                if (filter.personalShiftFilter?.updates) {
+                    html += '<div class="webhook-filter-item"><span class="check-icon">✓</span> Персональные смены</div>';
+                }
+                if (filter.reserveFilter?.updates) {
+                    html += '<div class="webhook-filter-item"><span class="check-icon">✓</span> Резервации</div>';
+                }
+                html += '</div>';
+                
+                html += '<details style="margin-top:12px;"><summary style="cursor:pointer;font-size:12px;color:var(--muted);">Показать полный JSON</summary>';
+                html += '<pre style="font-size:11px;max-height:300px;overflow:auto;margin-top:8px;padding:12px;background:rgba(0,0,0,0.2);border-radius:8px;">' + escapeHtml(JSON.stringify(data.webHooksFilter, null, 2)) + '</pre>';
+                html += '</details>';
+            }
+        } else {
+            html = '<span class="badge badge-warning">⚠️ Вебхук не зарегистрирован в iiko Cloud</span>';
+        }
+        
+        container.innerHTML = html;
+    } catch (err) {
+        container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>';
+    }
+}
+
+async function loadWebhookSetupStats() {
+    try {
+        let url = '/admin/api/webhooks/events?limit=100';
+        const events = await apiGet(url);
+        const eventsList = Array.isArray(events) ? events : [];
+        
+        document.getElementById('stat-setup-total').textContent = eventsList.length;
+        document.getElementById('stat-setup-processed').textContent = eventsList.filter(e => e.processed).length;
+        document.getElementById('stat-setup-errors').textContent = eventsList.filter(e => e.processing_error).length;
+        
+        if (eventsList.length > 0) {
+            const last = eventsList[0];
+            const lastDate = last.created_at ? new Date(last.created_at) : null;
+            if (lastDate) {
+                const now = new Date();
+                const diffMs = now - lastDate;
+                const diffMin = Math.floor(diffMs / 60000);
+                if (diffMin < 1) {
+                    document.getElementById('stat-setup-last').textContent = 'только что';
+                } else if (diffMin < 60) {
+                    document.getElementById('stat-setup-last').textContent = diffMin + ' мин назад';
+                } else if (diffMin < 1440) {
+                    document.getElementById('stat-setup-last').textContent = Math.floor(diffMin / 60) + ' ч назад';
+                } else {
+                    document.getElementById('stat-setup-last').textContent = Math.floor(diffMin / 1440) + ' дн назад';
+                }
+            } else {
+                document.getElementById('stat-setup-last').textContent = '—';
+            }
+        }
+    } catch (err) {
+        // Silent fail for stats
+    }
+}
+
 // Auto-load on page load
 document.addEventListener('DOMContentLoaded', () => {
-    loadEnhancedOrders();
+    loadSetupTab();
 });
 </script>
 @endsection
