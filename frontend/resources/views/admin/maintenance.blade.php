@@ -1,0 +1,2437 @@
+@extends('layouts.admin')
+
+@section('title', 'Обслуживание')
+@section('page-title', 'Обслуживание')
+
+@section('styles')
+<style>
+    .section-gap { margin-bottom: 20px; }
+    .component-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--border);
+    }
+    .component-row:last-child { border-bottom: none; }
+    .component-name {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+    }
+    .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+    .settings-form { max-width: 520px; }
+    .webhook-result {
+        padding: 14px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(0,0,0,0.2);
+        margin-top: 12px;
+    }
+    .data-section {
+        margin-top: 12px;
+        padding: 14px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(0,0,0,0.15);
+    }
+</style>
+@endsection
+
+@section('content')
+{{-- Tab Bar --}}
+<div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('status', event)">📡 Статус</button>
+    <button class="tab-btn" onclick="switchTab('settings', event)">⚙️ Настройки API</button>
+    <button class="tab-btn" onclick="switchTab('webhooks', event)">🔗 Вебхуки</button>
+    <button class="tab-btn" onclick="switchTab('data', event)">📋 Данные iiko</button>
+    <button class="tab-btn" onclick="switchTab('loyalty', event)">🎁 Лояльность</button>
+    <button class="tab-btn" onclick="switchTab('logs', event)">📝 Логи</button>
+</div>
+
+{{-- ═══ TAB: Server Status ═══ --}}
+<div class="tab-content active" id="tab-status">
+    <div class="grid-4 section-gap" id="stat-cards">
+        <div class="card stat-card">
+            <span class="stat-label">Сервер</span>
+            <span class="stat-value" id="stat-server" style="font-size:18px;">
+                <span class="spinner"></span>
+            </span>
+        </div>
+        <div class="card stat-card">
+            <span class="stat-label">Аптайм</span>
+            <span class="stat-value" id="stat-uptime" style="font-size:18px;">—</span>
+        </div>
+        <div class="card stat-card">
+            <span class="stat-label">Заказы</span>
+            <span class="stat-value" id="stat-orders" style="font-size:24px;">—</span>
+        </div>
+        <div class="card stat-card">
+            <span class="stat-label">Вебхук-события</span>
+            <span class="stat-value" id="stat-webhooks" style="font-size:24px;">—</span>
+        </div>
+    </div>
+
+    <div class="grid-2 section-gap">
+        {{-- Components Status --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">Компоненты</div>
+                    <div class="card-subtitle">Статус работы сервисов</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadStatus()">🔄 Обновить</button>
+            </div>
+            <div id="components-list">
+                <div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>
+            </div>
+        </div>
+
+        {{-- Statistics --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">Статистика</div>
+                    <div class="card-subtitle">Общие показатели системы</div>
+                </div>
+            </div>
+            <div id="stats-details">
+                <div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Recent Errors --}}
+    <div class="card section-gap">
+        <div class="card-header">
+            <div>
+                <div class="card-title">Последние ошибки</div>
+                <div class="card-subtitle">Ошибки в запросах к iiko API</div>
+            </div>
+        </div>
+        <div id="errors-list">
+            <div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>
+        </div>
+    </div>
+</div>
+
+{{-- ═══ TAB: API Settings ═══ --}}
+<div class="tab-content" id="tab-settings">
+    <div class="grid-2 section-gap">
+        {{-- Add / Edit iiko API Login --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">IIKO API Логин</div>
+                    <div class="card-subtitle">Добавьте или измените API ключ интеграции</div>
+                </div>
+            </div>
+            <div class="settings-form">
+                <div class="form-group">
+                    <label class="form-label">API ключ (apiLogin)</label>
+                    <div style="position:relative;">
+                        <input type="password" class="form-input" id="api-key-input" placeholder="Введите ваш iiko API логин" autocomplete="new-password" style="padding-right:40px;">
+                        <button type="button" id="api-key-toggle-btn" onclick="toggleApiKeyVisibility()" aria-label="Показать API ключ" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;padding:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center;outline:2px solid transparent;outline-offset:2px;border-radius:4px;transition:outline 0.2s;" onfocus="this.style.outline='2px solid var(--accent)'" onblur="this.style.outline='2px solid transparent'">
+                            <span id="api-key-toggle-icon" aria-hidden="true">👁</span>
+                        </button>
+                    </div>
+                    <div style="font-size:11px;color:var(--muted);margin-top:4px;">
+                        💡 При редактировании оставьте пустым, чтобы сохранить текущий ключ
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">API URL</label>
+                    <input type="text" class="form-input" id="api-url-input" value="https://api-ru.iiko.services/api/1" placeholder="https://api-ru.iiko.services/api/1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Organization ID (необязательно)</label>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <select class="form-input" id="org-id-select" style="flex:1;">
+                            <option value="">— Не выбрано —</option>
+                        </select>
+                        <button type="button" class="btn btn-sm" id="btn-load-orgs" onclick="loadOrganizations()" title="Загрузить организации по API ключу">🔄 Загрузить</button>
+                    </div>
+                    <input type="text" class="form-input" id="org-id-input" placeholder="Или введите UUID вручную" style="margin-top:6px;font-size:12px;">
+                    <div id="org-load-message" style="margin-top:4px;font-size:11px;"></div>
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <button class="btn btn-primary" id="btn-save-settings" onclick="saveSettings()">💾 Сохранить</button>
+                    <button class="btn btn-success" id="btn-test-connection" onclick="testConnection()" disabled>🔌 Проверить</button>
+                </div>
+                <div id="settings-message" style="margin-top:12px;"></div>
+            </div>
+        </div>
+
+        {{-- Existing Settings List --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">Сохраненные настройки</div>
+                    <div class="card-subtitle">Активные интеграции с iiko</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadSettings()">🔄</button>
+            </div>
+            <div id="settings-list">
+                <div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Connection Status --}}
+    <div class="card section-gap">
+        <div class="card-header">
+            <div>
+                <div class="card-title">Статус подключения к IIKO API</div>
+                <div class="card-subtitle">Проверьте работоспособность соединения</div>
+            </div>
+        </div>
+        <div id="connection-status">
+            <span class="badge badge-muted">Выберите настройку и нажмите «Проверить» для тестирования</span>
+        </div>
+    </div>
+</div>
+
+{{-- ═══ TAB: Webhooks ═══ --}}
+<div class="tab-content" id="tab-webhooks">
+    {{-- Link to comprehensive webhooks page --}}
+    <div class="card section-gap" style="background:linear-gradient(135deg, rgba(99,102,241,0.15), rgba(34,211,238,0.15));border-color:var(--accent);">
+        <div style="padding:20px;text-align:center;">
+            <div style="font-size:18px;font-weight:700;color:var(--text-bright);margin-bottom:8px;">
+                🔗 Новая страница управления вебхуками
+            </div>
+            <div style="font-size:13px;color:var(--text);margin-bottom:16px;">
+                Полное управление вебхуками, заказами, курьерами и бонусами с расширенными возможностями
+            </div>
+            <a href="{{ route('admin.webhooks') }}" class="btn btn-primary" style="font-size:14px;padding:12px 24px;">
+                🚀 Открыть страницу "Вебхуки & Заказы"
+            </a>
+        </div>
+    </div>
+
+    <div class="grid-2 section-gap">
+        {{-- Webhook Configuration --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">🔗 Настройка вебхука</div>
+                    <div class="card-subtitle">Регистрация вебхука в iiko Cloud</div>
+                </div>
+            </div>
+            <div class="settings-form">
+                <div class="form-group">
+                    <label class="form-label">Настройка iiko</label>
+                    <select class="form-input" id="webhook-setting-select" onchange="onWebhookSettingChange()">
+                        <option value="">Загрузка...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Домен вашего сервера</label>
+                    <input type="text" class="form-input" id="webhook-domain-input" placeholder="example.com">
+                    <div style="font-size:11px;color:var(--muted);margin-top:4px;">
+                        Введите только домен (например: vezuroll.ru). URL вебхука и токен авторизации будут сгенерированы автоматически.
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Или введите полный URL вебхука</label>
+                    <input type="text" class="form-input" id="webhook-url-input" placeholder="https://example.com/api/v1/webhooks/iiko">
+                    <div style="font-size:11px;color:var(--muted);margin-top:4px;">
+                        Полный URL для приема вебхуков от iiko
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Токен авторизации (опционально)</label>
+                    <input type="text" class="form-input" id="webhook-token-input" placeholder="Будет сгенерирован автоматически">
+                    <div style="font-size:11px;color:var(--muted);margin-top:4px;">
+                        Оставьте пустым для автоматической генерации
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <button class="btn btn-primary" onclick="registerWebhook()">🔗 Зарегистрировать вебхук</button>
+                    <button class="btn" onclick="testWebhook()">🧪 Тестировать</button>
+                    <button class="btn" onclick="getWebhookSettings()">📋 Получить настройки</button>
+                </div>
+                <div id="webhook-result" style="margin-top:12px;display:none;">
+                    <div class="webhook-result">
+                        <div style="margin-bottom:8px;">
+                            <span class="form-label">URL вебхука:</span>
+                        </div>
+                        <div class="mono" id="webhook-generated-url" style="color:var(--accent);word-break:break-all;margin-bottom:10px;"></div>
+                        <div style="margin-bottom:8px;">
+                            <span class="form-label">Токен авторизации:</span>
+                        </div>
+                        <div class="mono" id="webhook-auth-token" style="color:var(--accent-2);word-break:break-all;"></div>
+                        <div style="margin-top:8px;">
+                            <span class="badge badge-success">✓ Вебхук зарегистрирован в iiko</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="webhook-error" style="margin-top:12px;"></div>
+            </div>
+        </div>
+
+        <div>
+            {{-- Current Webhook Settings from iiko --}}
+            <div class="card" style="margin-bottom:16px;">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">⚙️ Настройки вебхука в iiko</div>
+                        <div class="card-subtitle">Текущая конфигурация вебхука в iiko Cloud</div>
+                    </div>
+                </div>
+                <div id="iiko-webhook-settings">
+                    <span class="badge badge-muted">Нажмите «Получить настройки» для загрузки</span>
+                </div>
+            </div>
+
+            {{-- Local Webhook Configuration --}}
+            <div class="card" style="margin-bottom:16px;">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">💾 Локальные настройки</div>
+                        <div class="card-subtitle">Сохраненные URL и токен</div>
+                    </div>
+                </div>
+                <div id="current-webhook-info">
+                    <span class="badge badge-muted">Выберите настройку iiko для просмотра</span>
+                </div>
+            </div>
+
+            {{-- Webhook Events --}}
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">📨 Входящие события</div>
+                        <div class="card-subtitle">Последние вебхук-события от iiko</div>
+                    </div>
+                    <button class="btn btn-sm" onclick="loadWebhookEvents()">🔄</button>
+                </div>
+                <div id="webhook-events-list">
+                    <div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Webhook Configuration Guide --}}
+    <div class="card section-gap">
+        <div class="card-header">
+            <div>
+                <div class="card-title">📖 Руководство по настройке вебхуков</div>
+                <div class="card-subtitle">Пошаговая инструкция</div>
+            </div>
+        </div>
+        <div style="padding:0 16px 16px;">
+            <div style="margin-bottom:12px;">
+                <strong>Что такое вебхуки?</strong><br>
+                <span style="font-size:13px;color:var(--muted);">
+                    Вебхуки позволяют получать уведомления от iiko о событиях в реальном времени:
+                    изменения статусов заказов, обновления стоп-листов, и другие события.
+                </span>
+            </div>
+            <div style="margin-bottom:12px;">
+                <strong>Шаги настройки:</strong>
+                <ol style="font-size:13px;color:var(--muted);margin-left:20px;">
+                    <li>Выберите настройку iiko из списка</li>
+                    <li>Введите домен вашего сервера (например: example.com)</li>
+                    <li>Нажмите «Зарегистрировать вебхук»</li>
+                    <li>Система автоматически сгенерирует URL и токен авторизации</li>
+                    <li>Проверьте работу вебхука кнопкой «Тестировать»</li>
+                </ol>
+            </div>
+            <div style="margin-bottom:12px;">
+                <strong>Отслеживаемые события:</strong>
+                <ul style="font-size:13px;color:var(--muted);margin-left:20px;">
+                    <li>Изменения статусов заказов доставки</li>
+                    <li>Обновления стоп-листов</li>
+                    <li>Ошибки обработки заказов</li>
+                    <li>Изменения в персональных сменах (опционально)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{-- ═══ TAB: iiko Data ═══ --}}
+<div class="tab-content" id="tab-data">
+    {{-- Synchronization Controls --}}
+    <div class="card section-gap">
+        <div class="card-header">
+            <div>
+                <div class="card-title">🔄 Синхронизация данных</div>
+                <div class="card-subtitle">Синхронизируйте меню, стоп-листы и справочники из iiko в локальную БД</div>
+            </div>
+        </div>
+
+        <div id="data-active-setting-info" style="margin-bottom:16px;">
+            <span class="badge badge-muted">Загрузка настроек...</span>
+        </div>
+
+        <div class="data-section">
+            <div style="font-weight:600;margin-bottom:12px;">Управление синхронизацией</div>
+            <div class="grid-4" style="gap:8px;">
+                <button class="btn" onclick="syncData('full')" id="btn-sync-full">
+                    🔄 Полная синхронизация
+                </button>
+                <button class="btn" onclick="syncData('menu')" id="btn-sync-menu">
+                    📋 Меню
+                </button>
+                <button class="btn" onclick="syncData('stoplist')" id="btn-sync-stoplist">
+                    🚫 Стоп-листы
+                </button>
+                <button class="btn" onclick="syncData('terminals')" id="btn-sync-terminals">
+                    🏪 Терминалы
+                </button>
+                <button class="btn" onclick="syncData('payments')" id="btn-sync-payments">
+                    💳 Типы оплат
+                </button>
+            </div>
+            <div id="sync-progress" style="margin-top:12px;display:none;">
+                <div style="padding:12px;background:rgba(99,102,241,0.1);border-radius:8px;border:1px solid var(--accent);">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span class="spinner" style="width:16px;height:16px;"></span>
+                        <span id="sync-status-text">Синхронизация...</span>
+                    </div>
+                </div>
+            </div>
+            <div id="sync-result" style="margin-top:12px;"></div>
+        </div>
+    </div>
+
+    {{-- Sync History --}}
+    <div class="card section-gap">
+        <div class="card-header">
+            <div>
+                <div class="card-title">📊 История синхронизаций</div>
+                <div class="card-subtitle">Последние операции синхронизации</div>
+            </div>
+            <button class="btn btn-sm" onclick="loadSyncHistory()">🔄 Обновить</button>
+        </div>
+        <div id="sync-history-list">
+            <span class="badge badge-muted">Нажмите «Обновить» для загрузки истории</span>
+        </div>
+    </div>
+
+    {{-- Synced Data Viewing --}}
+    <div class="card section-gap">
+        <div class="card-header">
+            <div>
+                <div class="card-title">📦 Синхронизированные данные</div>
+                <div class="card-subtitle">Просмотр данных в локальной БД</div>
+            </div>
+        </div>
+
+        <div class="grid-3" style="gap:8px;margin-bottom:16px;">
+            <button class="btn btn-sm" onclick="loadSyncedData('categories')">
+                📂 Категории
+            </button>
+            <button class="btn btn-sm" onclick="loadSyncedData('products')">
+                🍕 Товары
+            </button>
+            <button class="btn btn-sm" onclick="loadSyncedData('stop-lists')">
+                🚫 Стоп-листы
+            </button>
+        </div>
+
+        <div id="synced-data-view">
+            <span class="badge badge-muted">Выберите тип данных для просмотра</span>
+        </div>
+    </div>
+
+    <div class="grid-2 section-gap">
+        {{-- Terminal Groups / Venues --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">🏪 Точки / Заведения</div>
+                    <div class="card-subtitle">Терминальные группы</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('terminal-groups')">Загрузить</button>
+            </div>
+            <div id="data-terminal-groups">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+
+        {{-- Payment Types --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">💳 Типы оплат</div>
+                    <div class="card-subtitle">Доступные способы оплаты</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('payment-types')">Загрузить</button>
+            </div>
+            <div id="data-payment-types">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+
+        {{-- Couriers --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">🚴 Курьеры</div>
+                    <div class="card-subtitle">Доступные курьеры</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('couriers')">Загрузить</button>
+            </div>
+            <div id="data-couriers">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+
+        {{-- Order Types --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">📦 Типы заказов</div>
+                    <div class="card-subtitle">Доступные типы заказов доставки</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('order-types')">Загрузить</button>
+            </div>
+            <div id="data-order-types">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+
+        {{-- Discount Types --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">🏷️ Скидки</div>
+                    <div class="card-subtitle">Доступные типы скидок</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('discount-types')">Загрузить</button>
+            </div>
+            <div id="data-discount-types">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+
+        {{-- Stop Lists --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">🚫 Стоп-листы</div>
+                    <div class="card-subtitle">Позиции в стоп-листе</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('stop-lists')">Загрузить</button>
+            </div>
+            <div id="data-stop-lists">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+
+        {{-- Cancel Causes --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">❌ Причины отмены</div>
+                    <div class="card-subtitle">Причины отмены заказов</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('cancel-causes')">Загрузить</button>
+            </div>
+            <div id="data-cancel-causes">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+
+        {{-- Removal Types --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">🗑️ Типы удалений</div>
+                    <div class="card-subtitle">Причины удаления позиций из заказа</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('removal-types')">Загрузить</button>
+            </div>
+            <div id="data-removal-types">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+
+        {{-- Tips Types --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">💵 Типы чаевых</div>
+                    <div class="card-subtitle">Доступные типы чаевых</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('tips-types')">Загрузить</button>
+            </div>
+            <div id="data-tips-types">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+
+        {{-- Delivery Restrictions --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">🗺️ Ограничения доставки</div>
+                    <div class="card-subtitle">Зоны доставки, минимальные суммы</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('delivery-restrictions')">Загрузить</button>
+            </div>
+            <div id="data-delivery-restrictions">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+
+        {{-- Cities --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">🏙️ Города</div>
+                    <div class="card-subtitle">Список городов организации</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('cities')">Загрузить</button>
+            </div>
+            <div id="data-cities">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+
+        {{-- Regions --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">🌍 Регионы</div>
+                    <div class="card-subtitle">Список регионов</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('regions')">Загрузить</button>
+            </div>
+            <div id="data-regions">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+
+        {{-- Marketing Sources --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">📣 Маркетинговые источники</div>
+                    <div class="card-subtitle">Источники маркетинговых кампаний</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('marketing-sources')">Загрузить</button>
+            </div>
+            <div id="data-marketing-sources">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+
+        {{-- Organization Settings --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">⚙️ Настройки организации</div>
+                    <div class="card-subtitle">Параметры организации из iiko</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('organization-settings')">Загрузить</button>
+            </div>
+            <div id="data-organization-settings">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+
+        {{-- Terminal Groups Status --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">🟢 Статус терминалов</div>
+                    <div class="card-subtitle">Проверка доступности терминальных групп</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('terminal-groups-alive')">Проверить</button>
+            </div>
+            <div id="data-terminal-groups-alive">
+                <span class="badge badge-muted">Нажмите «Проверить» для проверки доступности</span>
+            </div>
+        </div>
+
+        {{-- Couriers Location --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">📍 Локация курьеров</div>
+                    <div class="card-subtitle">GPS координаты активных курьеров</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('couriers-location')">Загрузить</button>
+            </div>
+            <div id="data-couriers-location">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+
+        {{-- Combo --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">🎯 Комбо-предложения</div>
+                    <div class="card-subtitle">Доступные комбо-наборы</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('combo')">Загрузить</button>
+            </div>
+            <div id="data-combo">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+
+        {{-- Customer Categories --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">👥 Категории гостей</div>
+                    <div class="card-subtitle">Категории клиентов программы лояльности</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadDataSection('customer-categories')">Загрузить</button>
+            </div>
+            <div id="data-customer-categories">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+
+        {{-- iiko Deliveries --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">🚚 Заказы доставки iiko</div>
+                    <div class="card-subtitle">Активные заказы из iiko (за выбранный период)</div>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <select class="form-input" id="deliveries-days-select" style="max-width:120px;">
+                        <option value="1" selected>1 день</option>
+                        <option value="2">2 дня</option>
+                        <option value="3">3 дня</option>
+                    </select>
+                    <button class="btn btn-sm" onclick="loadIikoDeliveries()">Загрузить</button>
+                </div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;font-size:12px;">
+                <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" class="maint-delivery-status-cb" value="Unconfirmed" checked> Не подтвержден</label>
+                <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" class="maint-delivery-status-cb" value="WaitCooking" checked> Ожидает</label>
+                <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" class="maint-delivery-status-cb" value="CookingStarted" checked> Готовится</label>
+                <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" class="maint-delivery-status-cb" value="OnWay" checked> В пути</label>
+                <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" class="maint-delivery-status-cb" value="Delivered" checked> Доставлен</label>
+            </div>
+            <div id="data-iiko-deliveries">
+                <span class="badge badge-muted">Нажмите «Загрузить» для получения данных</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{-- ═══ TAB: Loyalty / iikoCard ═══ --}}
+<div class="tab-content" id="tab-loyalty">
+    <div class="grid-2 section-gap">
+        {{-- Loyalty Programs --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">🎁 Программы лояльности</div>
+                    <div class="card-subtitle">Бонусные программы из iiko</div>
+                </div>
+                <button class="btn btn-sm" onclick="loadLoyaltyPrograms()" id="btn-load-programs">📥 Загрузить</button>
+            </div>
+            <div id="loyalty-programs-list">
+                <span class="badge badge-muted">Выберите настройку API и нажмите «Загрузить»</span>
+            </div>
+            <div id="loyalty-wallet-select-section" style="display:none;margin-top:12px;">
+                <div class="form-group">
+                    <label class="form-label">Активная бонусная программа</label>
+                    <select class="form-input" id="loyalty-active-program" onchange="onProgramSelected()">
+                        <option value="">— Выберите программу —</option>
+                    </select>
+                </div>
+                <div id="loyalty-program-detail" style="margin-top:8px;"></div>
+            </div>
+        </div>
+
+        {{-- Customer Search --}}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">🔍 Поиск гостя</div>
+                    <div class="card-subtitle">Поиск в программе лояльности</div>
+                </div>
+            </div>
+            <div class="settings-form">
+                <div class="form-group">
+                    <label class="form-label">Телефон или email</label>
+                    <input class="form-input" id="loyalty-search-query" placeholder="+7XXXXXXXXXX или email">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Тип поиска</label>
+                    <select class="form-input" id="loyalty-search-type">
+                        <option value="phone">По телефону</option>
+                        <option value="email">По email</option>
+                        <option value="cardNumber">По номеру карты</option>
+                        <option value="cardTrack">По треку карты</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="searchLoyaltyCustomer()">🔍 Найти</button>
+            </div>
+            <div id="loyalty-customer-info" style="margin-top:12px;"></div>
+        </div>
+    </div>
+
+    {{-- Customer Balance & Operations --}}
+    <div class="card section-gap">
+        <div class="card-header">
+            <div>
+                <div class="card-title">💰 Управление бонусами</div>
+                <div class="card-subtitle">Пополнение, списание и холдирование бонусов</div>
+            </div>
+        </div>
+        <div id="loyalty-balance-section">
+            <span class="badge badge-muted">Найдите гостя для работы с бонусами</span>
+        </div>
+
+        <div id="loyalty-operations" style="display:none;margin-top:16px;">
+            <div class="grid-3">
+                <div class="form-group">
+                    <label class="form-label">ID кошелька</label>
+                    <select class="form-input" id="loyalty-wallet-id"></select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Сумма</label>
+                    <input class="form-input" id="loyalty-amount" type="number" step="0.01" min="0.01" placeholder="100.00">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Комментарий</label>
+                    <input class="form-input" id="loyalty-comment" placeholder="Необязательно">
+                </div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn btn-success" onclick="loyaltyTopup()">➕ Пополнить</button>
+                <button class="btn btn-danger" onclick="loyaltyWithdraw()">➖ Списать</button>
+                <button class="btn" onclick="loyaltyHold()">🔒 Холдировать</button>
+            </div>
+            <div id="loyalty-operation-result" style="margin-top:12px;"></div>
+        </div>
+    </div>
+
+    {{-- Transaction History --}}
+    <div class="card section-gap">
+        <div class="card-header">
+            <div>
+                <div class="card-title">📋 История операций с бонусами</div>
+                <div class="card-subtitle">Начисления и списания в режиме реального времени</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px;">
+                    <input type="checkbox" id="loyalty-auto-refresh" onchange="toggleAutoRefresh()"> Авто-обновление
+                </label>
+                <button class="btn btn-sm" onclick="loadTransactionHistory()">🔄 Обновить</button>
+            </div>
+        </div>
+        <div id="loyalty-transactions-list">
+            <span class="badge badge-muted">Загрузите программы лояльности для просмотра истории</span>
+        </div>
+    </div>
+
+    {{-- Create/Update Customer --}}
+    <div class="card section-gap">
+        <div class="card-header">
+            <div>
+                <div class="card-title">➕ Создать / обновить гостя</div>
+                <div class="card-subtitle">Добавление нового гостя в программу лояльности</div>
+            </div>
+        </div>
+        <div class="settings-form">
+            <div class="grid-2">
+                <div class="form-group">
+                    <label class="form-label">Имя</label>
+                    <input class="form-input" id="new-customer-name" placeholder="Иван Петров">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Телефон</label>
+                    <input class="form-input" id="new-customer-phone" placeholder="+79001234567">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input class="form-input" id="new-customer-email" placeholder="email@example.com">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Дата рождения</label>
+                    <input class="form-input" id="new-customer-birthday" type="date">
+                </div>
+            </div>
+            <button class="btn btn-primary" onclick="createOrUpdateCustomer()">💾 Сохранить</button>
+            <div id="new-customer-result" style="margin-top:12px;"></div>
+        </div>
+    </div>
+</div>
+
+{{-- ═══ TAB: Logs ═══ --}}
+<div class="tab-content" id="tab-logs">
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <div class="card-title">Журнал API запросов</div>
+                <div class="card-subtitle">Последние запросы к iiko API</div>
+            </div>
+            <button class="btn btn-sm" onclick="loadLogs()">🔄 Обновить</button>
+        </div>
+        <div id="logs-list">
+            <div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>
+        </div>
+    </div>
+</div>
+@endsection
+
+@section('scripts')
+<script>
+const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+
+// ─── State ───────────────────────────────────────────────
+let currentSettingId = null;
+let currentOrgId = null;
+let currentOrgName = null;
+let settingsList = [];
+
+// ─── Tabs ────────────────────────────────────────────────
+function switchTab(name, evt) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    if (evt && evt.target) evt.target.classList.add('active');
+
+    if (name === 'status') loadStatus();
+    if (name === 'settings') loadSettings();
+    if (name === 'webhooks') { loadSettings(); loadWebhookEvents(); }
+    if (name === 'data') loadSettings();
+    if (name === 'loyalty') loadSettings();
+    if (name === 'logs') loadLogs();
+}
+
+// ─── HTTP Helpers ─────────────────────────────────────────
+async function apiGet(url) {
+    const res = await fetch(url, { headers: { 'X-CSRF-TOKEN': csrfToken } });
+    try {
+        return { status: res.status, data: await res.json() };
+    } catch (e) {
+        return { status: res.status, data: { detail: 'Ошибка разбора ответа сервера' } };
+    }
+}
+
+async function apiPost(url, body = {}) {
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify(body),
+    });
+    try {
+        return { status: res.status, data: await res.json() };
+    } catch (e) {
+        return { status: res.status, data: { detail: 'Ошибка разбора ответа сервера' } };
+    }
+}
+
+async function apiPut(url, body = {}) {
+    const res = await fetch(url, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify(body),
+    });
+    try {
+        return { status: res.status, data: await res.json() };
+    } catch (e) {
+        return { status: res.status, data: { detail: 'Ошибка разбора ответа сервера' } };
+    }
+}
+
+async function apiDelete(url) {
+    const res = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    });
+    try {
+        return { status: res.status, data: await res.json() };
+    } catch (e) {
+        return { status: res.status, data: { detail: 'Ошибка разбора ответа сервера' } };
+    }
+}
+
+// ─── Format helpers ──────────────────────────────────────
+function formatUptime(seconds) {
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (d > 0) return d + 'д ' + h + 'ч';
+    if (h > 0) return h + 'ч ' + m + 'м';
+    return m + 'м ' + (seconds % 60) + 'с';
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = String(str);
+    return div.innerHTML;
+}
+
+// ─── Status Tab ──────────────────────────────────────────
+async function loadStatus() {
+    try {
+        const resp = await apiGet('/admin/api/status');
+        const data = resp.data;
+        // Server status
+        const serverStatus = data.server?.status === 'running';
+        document.getElementById('stat-server').innerHTML =
+            '<span class="status-dot ' + (serverStatus ? 'online' : 'offline') + '"></span>' +
+            (serverStatus ? 'Работает' : 'Ошибка');
+        document.getElementById('stat-uptime').textContent = formatUptime(data.server?.uptime_seconds || 0);
+        document.getElementById('stat-orders').textContent = data.stats?.orders ?? '—';
+        document.getElementById('stat-webhooks').textContent = data.stats?.webhook_events ?? '—';
+
+        // Components
+        const comps = data.components || {};
+        let compHtml = '';
+        compHtml += '<div class="component-row">' +
+            '<div class="component-name"><span class="status-dot ' + (serverStatus ? 'online' : 'offline') + '"></span> FastAPI Сервер</div>' +
+            '<span class="badge ' + (serverStatus ? 'badge-success' : 'badge-danger') + '">' + (serverStatus ? 'Работает' : 'Ошибка') + '</span></div>';
+        compHtml += '<div class="component-row">' +
+            '<div class="component-name"><span class="status-dot ' + (comps.database?.status === 'ok' ? 'online' : 'offline') + '"></span> PostgreSQL</div>' +
+            '<span class="badge ' + (comps.database?.status === 'ok' ? 'badge-success' : 'badge-danger') + '">' + (comps.database?.status === 'ok' ? 'Подключена' : 'Ошибка') + '</span></div>';
+        compHtml += '<div class="component-row">' +
+            '<div class="component-name"><span class="status-dot ' + (comps.iiko_api?.configured ? 'online' : 'warning') + '"></span> iiko Cloud API</div>' +
+            '<span class="badge ' + (comps.iiko_api?.configured ? 'badge-success' : 'badge-warning') + '">' + (comps.iiko_api?.configured ? 'Настроено' : 'Не настроено') + '</span></div>';
+        document.getElementById('components-list').innerHTML = compHtml;
+
+        // Stats details
+        const stats = data.stats || {};
+        let statsHtml = '';
+        statsHtml += '<div class="component-row"><div class="component-name">📦 Заказы</div><strong>' + (stats.orders ?? 0) + '</strong></div>';
+        statsHtml += '<div class="component-row"><div class="component-name">🔗 Вебхук-события</div><strong>' + (stats.webhook_events ?? 0) + '</strong></div>';
+        statsHtml += '<div class="component-row"><div class="component-name">📝 API логов</div><strong>' + (stats.api_logs ?? 0) + '</strong></div>';
+        statsHtml += '<div class="component-row"><div class="component-name">👥 Пользователи</div><strong>' + (stats.users ?? 0) + '</strong></div>';
+        statsHtml += '<div class="component-row"><div class="component-name">⚙️ Интеграции iiko</div><strong>' + (stats.iiko_settings ?? 0) + '</strong></div>';
+        document.getElementById('stats-details').innerHTML = statsHtml;
+
+        // Errors
+        const errors = data.recent_errors || [];
+        if (errors.length === 0) {
+            document.getElementById('errors-list').innerHTML = '<span class="badge badge-success">✓ Ошибок нет</span>';
+        } else {
+            let errHtml = '<div class="table-wrap"><table><thead><tr><th>ID</th><th>Метод</th><th>URL</th><th>Статус</th><th>Время</th><th>Дата</th></tr></thead><tbody>';
+            errors.forEach(e => {
+                errHtml += '<tr>' +
+                    '<td>' + e.id + '</td>' +
+                    '<td><span class="badge badge-muted">' + escapeHtml(e.method) + '</span></td>' +
+                    '<td class="mono" style="max-width:250px;overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(e.url) + '</td>' +
+                    '<td><span class="badge badge-danger">' + e.status + '</span></td>' +
+                    '<td>' + (e.duration_ms || '—') + ' мс</td>' +
+                    '<td style="font-size:12px;color:var(--muted);">' + (e.created_at || '—') + '</td>' +
+                    '</tr>';
+            });
+            errHtml += '</tbody></table></div>';
+            document.getElementById('errors-list').innerHTML = errHtml;
+        }
+    } catch (err) {
+        document.getElementById('stat-server').innerHTML = '<span class="status-dot offline"></span> Недоступен';
+        document.getElementById('components-list').innerHTML = '<div class="alert alert-danger">⚠️ Не удалось загрузить статус: ' + escapeHtml(err.message) + '</div>';
+    }
+}
+
+// ─── Settings Tab ────────────────────────────────────────
+async function loadSettings() {
+    try {
+        const resp = await apiGet('/admin/api/iiko-settings');
+        const data = resp.data;
+        settingsList = Array.isArray(data) ? data : [];
+        
+        // Auto-select: prefer previously selected, then first with organization_id, then first
+        if (!currentSettingId || !settingsList.find(s => s.id === currentSettingId)) {
+            const withOrg = settingsList.find(s => s.organization_id);
+            currentSettingId = withOrg ? withOrg.id : (settingsList.length > 0 ? settingsList[0].id : null);
+        }
+        
+        // Update global org from selected setting
+        const activeSetting = settingsList.find(s => s.id === currentSettingId);
+        if (activeSetting) {
+            currentOrgId = activeSetting.organization_id || null;
+            currentOrgName = activeSetting.organization_name || null;
+        }
+        
+        renderSettingsList();
+        populateSettingSelects();
+        updateDataSettingInfo();
+    } catch (err) {
+        document.getElementById('settings-list').innerHTML = '<div class="alert alert-danger">⚠️ Ошибка: ' + escapeHtml(err.message) + '</div>';
+    }
+}
+
+function renderSettingsList() {
+    const container = document.getElementById('settings-list');
+    if (settingsList.length === 0) {
+        container.innerHTML = '<span class="badge badge-muted">Нет сохраненных настроек. Добавьте API ключ.</span>';
+        document.getElementById('btn-test-connection').disabled = true;
+        return;
+    }
+    let html = '';
+    settingsList.forEach(s => {
+        const isSelected = currentSettingId === s.id;
+        const orgDisplay = s.organization_name 
+            ? escapeHtml(s.organization_name)
+            : (s.organization_id ? escapeHtml(s.organization_id) : null);
+        html += '<div class="component-row" style="cursor:pointer;' + (isSelected ? 'background:rgba(99,102,241,0.08);border-radius:8px;padding:10px;' : '') + '" onclick="selectSetting(' + s.id + ')">' +
+            '<div class="component-name">' +
+                '<span class="status-dot ' + (s.is_active ? 'online' : 'offline') + '"></span>' +
+                '<div>' +
+                    '<div style="font-weight:600;">Интеграция #' + s.id + '</div>' +
+                    '<div style="font-size:11px;color:var(--muted);">' + escapeHtml(s.api_url) + '</div>' +
+                    (orgDisplay ? '<div style="font-size:11px;color:var(--accent-2);">Org: ' + orgDisplay + '</div>' : '') +
+                    (s.webhook_url ? '<div style="font-size:11px;color:var(--success);">Webhook: ✓</div>' : '') +
+                '</div>' +
+            '</div>' +
+            '<div style="display:flex;gap:8px;align-items:center;">' +
+                '<span class="badge ' + (isSelected ? 'badge-success' : 'badge-muted') + '">' + (isSelected ? '✓ Выбрано' : 'Выбрать') + '</span>' +
+                '<button type="button" class="btn btn-sm" onclick="deleteSetting(event, ' + s.id + ')" title="Удалить настройку" aria-label="Удалить настройку интеграции #' + s.id + '" style="background:var(--danger);color:white;padding:4px 8px;">🗑️</button>' +
+            '</div>' +
+            '</div>';
+    });
+    container.innerHTML = html;
+    document.getElementById('btn-test-connection').disabled = !currentSettingId;
+}
+
+function selectSetting(id) {
+    currentSettingId = id;
+    const setting = settingsList.find(s => s.id === id);
+    if (setting) {
+        currentOrgId = setting.organization_id || null;
+        currentOrgName = setting.organization_name || null;
+    }
+    renderSettingsList();
+    updateDataSettingInfo();
+    if (setting) {
+        document.getElementById('api-url-input').value = setting.api_url || '';
+        // Set dropdown if matching option exists, otherwise set manual input
+        const sel = document.getElementById('org-id-select');
+        const manualInput = document.getElementById('org-id-input');
+        if (setting.organization_id) {
+            let found = false;
+            for (let i = 0; i < sel.options.length; i++) {
+                if (sel.options[i].value === setting.organization_id) {
+                    sel.value = setting.organization_id;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                manualInput.value = setting.organization_id;
+                sel.value = '';
+            } else {
+                manualInput.value = '';
+            }
+        } else {
+            sel.value = '';
+            manualInput.value = '';
+        }
+    }
+}
+
+async function loadOrganizations() {
+    const apiKey = document.getElementById('api-key-input').value.trim();
+    const apiUrl = document.getElementById('api-url-input').value.trim();
+    const sel = document.getElementById('org-id-select');
+    const msgEl = document.getElementById('org-load-message');
+
+    // If we have a saved setting selected, use setting_id endpoint
+    if (currentSettingId && !apiKey) {
+        msgEl.innerHTML = '<span class="spinner" style="width:14px;height:14px;"></span> Загрузка организаций...';
+        try {
+            const result = await apiPost('/admin/api/iiko-organizations', { setting_id: currentSettingId });
+            if (result.status >= 400) {
+                msgEl.innerHTML = '<span style="color:var(--danger);">⚠️ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</span>';
+                return;
+            }
+            const orgs = result.data.organizations || [];
+            populateOrgSelect(sel, orgs);
+            msgEl.innerHTML = '<span style="color:var(--success);">✓ Загружено организаций: ' + orgs.length + '</span>';
+        } catch (err) {
+            msgEl.innerHTML = '<span style="color:var(--danger);">⚠️ ' + escapeHtml(err.message) + '</span>';
+        }
+        return;
+    }
+
+    // Otherwise use API key directly
+    if (!apiKey) {
+        msgEl.innerHTML = '<span style="color:var(--danger);">⚠️ Введите API ключ для загрузки организаций</span>';
+        return;
+    }
+
+    msgEl.innerHTML = '<span class="spinner" style="width:14px;height:14px;"></span> Загрузка организаций...';
+    try {
+        const result = await apiPost('/admin/api/iiko-organizations-by-key', {
+            api_key: apiKey,
+            api_url: apiUrl || 'https://api-ru.iiko.services/api/1',
+        });
+        if (result.status >= 400) {
+            msgEl.innerHTML = '<span style="color:var(--danger);">⚠️ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</span>';
+            return;
+        }
+        const orgs = result.data.organizations || [];
+        populateOrgSelect(sel, orgs);
+        msgEl.innerHTML = '<span style="color:var(--success);">✓ Загружено организаций: ' + orgs.length + '</span>';
+    } catch (err) {
+        msgEl.innerHTML = '<span style="color:var(--danger);">⚠️ ' + escapeHtml(err.message) + '</span>';
+    }
+}
+
+function populateOrgSelect(sel, orgs) {
+    const currentVal = sel.value;
+    sel.innerHTML = '';
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = '';
+    defaultOpt.textContent = '— Не выбрано —';
+    sel.appendChild(defaultOpt);
+    orgs.forEach(org => {
+        const id = org.id || '';
+        const name = org.name || id;
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.setAttribute('data-org-name', name);
+        opt.textContent = name + ' (' + id.substring(0, 8) + '...)';
+        sel.appendChild(opt);
+    });
+    // Restore previous selection if it still exists
+    if (currentVal) {
+        for (let i = 0; i < sel.options.length; i++) {
+            if (sel.options[i].value === currentVal) {
+                sel.value = currentVal;
+                break;
+            }
+        }
+    }
+    // Clear manual input when dropdown is populated
+    document.getElementById('org-id-input').value = '';
+}
+
+function populateSettingSelects() {
+    const selects = ['webhook-setting-select'];
+    selects.forEach(selId => {
+        const sel = document.getElementById(selId);
+        if (!sel) return;
+        sel.innerHTML = '<option value="">Выберите настройку...</option>';
+        settingsList.forEach(s => {
+            const label = s.organization_name 
+                ? escapeHtml(s.organization_name) + ' (ID: #' + s.id + ')'
+                : 'Интеграция #' + s.id + (s.organization_id ? ' (' + escapeHtml(s.organization_id).substring(0,8) + '...)' : '');
+            sel.innerHTML += '<option value="' + s.id + '"' + (currentSettingId === s.id ? ' selected' : '') + '>' + label + '</option>';
+        });
+    });
+}
+
+function updateDataSettingInfo() {
+    const el = document.getElementById('data-active-setting-info');
+    if (!el) return;
+    if (!currentSettingId) {
+        el.innerHTML = '<div class="alert alert-warning">⚠️ Сначала создайте настройку API на вкладке «⚙️ Настройки API»</div>';
+        return;
+    }
+    const setting = settingsList.find(s => s.id === currentSettingId);
+    if (!setting) {
+        el.innerHTML = '<div class="alert alert-warning">⚠️ Настройка не найдена</div>';
+        return;
+    }
+    if (!setting.organization_id) {
+        el.innerHTML = '<div class="alert alert-warning">⚠️ Укажите Organization ID в настройках API (вкладка «⚙️ Настройки API»), чтобы использовать все функции</div>';
+        return;
+    }
+    el.innerHTML = '<div style="padding:10px;background:rgba(99,102,241,0.08);border-radius:8px;border:1px solid var(--accent);display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+        '<span style="font-weight:600;">🔗 Активная интеграция #' + setting.id + '</span>' +
+        '<span class="badge badge-success">🏢 ' + escapeHtml(setting.organization_name || setting.organization_id) + '</span>' +
+        '<span style="font-size:11px;color:var(--muted);">Все запросы используют эту настройку автоматически</span>' +
+    '</div>';
+}
+
+async function saveSettings() {
+    const apiKey = document.getElementById('api-key-input').value.trim();
+    const apiUrl = document.getElementById('api-url-input').value.trim();
+    const orgIdFromSelect = document.getElementById('org-id-select').value;
+    const orgIdFromInput = document.getElementById('org-id-input').value.trim();
+    const orgId = orgIdFromSelect || orgIdFromInput;
+    const msgEl = document.getElementById('settings-message');
+
+    // When updating existing settings, API key is optional
+    // When creating new settings, API key is required
+    if (!currentSettingId && !apiKey) {
+        msgEl.innerHTML = '<div class="alert alert-warning">⚠️ Введите API ключ для новой интеграции</div>';
+        return;
+    }
+
+    // Get organization name from the selected option's data attribute
+    let orgName = null;
+    if (orgIdFromSelect) {
+        const sel = document.getElementById('org-id-select');
+        if (sel && sel.selectedIndex >= 0) {
+            const selectedOption = sel.options[sel.selectedIndex];
+            orgName = selectedOption ? selectedOption.getAttribute('data-org-name') : null;
+        }
+    }
+
+    const body = {
+        api_url: apiUrl || 'https://api-ru.iiko.services/api/1',
+        organization_id: orgId || null,
+        organization_name: orgName || null,
+    };
+
+    // Only include api_key if it's provided (non-empty)
+    if (apiKey) {
+        body.api_key = apiKey;
+    }
+
+    try {
+        let result;
+        if (currentSettingId) {
+            result = await apiPut('/admin/api/iiko-settings/' + currentSettingId, body);
+        } else {
+            result = await apiPost('/admin/api/iiko-settings', body);
+        }
+
+        if (result.status >= 400) {
+            msgEl.innerHTML = '<div class="alert alert-danger">⚠️ Ошибка: ' + escapeHtml(JSON.stringify(result.data)) + '</div>';
+        } else {
+            msgEl.innerHTML = '<div class="alert alert-success">✓ Настройки сохранены</div>';
+            currentSettingId = result.data.id || currentSettingId;
+            // Clear the API key input after successful save for security
+            document.getElementById('api-key-input').value = '';
+            loadSettings();
+        }
+    } catch (err) {
+        msgEl.innerHTML = '<div class="alert alert-danger">⚠️ ' + escapeHtml(err.message) + '</div>';
+    }
+}
+
+async function deleteSetting(event, settingId) {
+    // Prevent the row click event from firing
+    event.stopPropagation();
+    
+    // Show confirmation dialog
+    if (!confirm('Вы уверены, что хотите удалить эту настройку? Это действие нельзя отменить.')) {
+        return;
+    }
+    
+    try {
+        const result = await apiDelete('/admin/api/iiko-settings/' + settingId);
+        
+        if (result.status >= 400) {
+            alert('⚠️ Ошибка при удалении: ' + (result.data.detail || JSON.stringify(result.data)));
+        } else {
+            // If the deleted setting was selected, clear the selection
+            if (currentSettingId === settingId) {
+                currentSettingId = null;
+                currentOrgId = null;
+                currentOrgName = null;
+                document.getElementById('api-key-input').value = '';
+                document.getElementById('api-url-input').value = 'https://api-ru.iiko.services/api/1';
+                document.getElementById('org-id-select').value = '';
+                document.getElementById('org-id-input').value = '';
+                document.getElementById('settings-message').innerHTML = '';
+            }
+            // Reload settings list
+            loadSettings();
+        }
+    } catch (err) {
+        alert('⚠️ Ошибка при удалении: ' + err.message);
+    }
+}
+
+async function testConnection() {
+    if (!currentSettingId) return;
+    const statusEl = document.getElementById('connection-status');
+    statusEl.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Проверка подключения...</div>';
+
+    try {
+        const result = await apiPost('/admin/api/iiko-test', { setting_id: currentSettingId });
+        if (result.status >= 400) {
+            let errorMsg = result.data.detail || JSON.stringify(result.data);
+            
+            // Add helpful hints based on error type
+            if (errorMsg.includes('401') || errorMsg.includes('Неверные') || errorMsg.includes('Invalid')) {
+                errorMsg += '<br><br><strong>Решение:</strong><br>' +
+                    '1. Проверьте API ключ в личном кабинете iiko Cloud<br>' +
+                    '2. Убедитесь что ключ активен и не истёк<br>' +
+                    '3. Скопируйте ключ полностью, без пробелов<br>' +
+                    '4. Используйте новый API ключ из раздела API в iiko Cloud';
+            } else if (errorMsg.includes('timeout') || errorMsg.includes('Тайм-аут')) {
+                errorMsg += '<br><br><strong>Решение:</strong> Проверьте доступность сервера iiko и интернет-соединение';
+            } else if (errorMsg.includes('DNS') || errorMsg.includes('подключения')) {
+                errorMsg += '<br><br><strong>Решение:</strong> Проверьте URL API и сетевые настройки';
+            }
+            
+            statusEl.innerHTML = '<div class="alert alert-danger">❌ Ошибка: ' + errorMsg + '</div>';
+        } else {
+            statusEl.innerHTML = '<div class="alert alert-success">✓ Подключение к iiko API успешно! Токен получен.</div>';
+        }
+    } catch (err) {
+        statusEl.innerHTML = '<div class="alert alert-danger">❌ Ошибка подключения: ' + escapeHtml(err.message) + '<br><small>Проверьте что Backend API запущен</small></div>';
+    }
+}
+
+// ─── Webhooks Tab ────────────────────────────────────────
+async function registerWebhook() {
+    const settingId = document.getElementById('webhook-setting-select').value;
+    const domain = document.getElementById('webhook-domain-input').value.trim();
+    const fullUrl = document.getElementById('webhook-url-input').value.trim();
+    const authToken = document.getElementById('webhook-token-input').value.trim();
+    const errorEl = document.getElementById('webhook-error');
+    const resultEl = document.getElementById('webhook-result');
+
+    if (!settingId) {
+        errorEl.innerHTML = '<div class="alert alert-warning">⚠️ Выберите настройку iiko</div>';
+        return;
+    }
+
+    let webhookUrl = fullUrl;
+    if (!webhookUrl && domain) {
+        // Generate URL from domain
+        const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+        webhookUrl = `https://${cleanDomain}/api/v1/webhooks/iiko`;
+    }
+
+    if (!webhookUrl) {
+        errorEl.innerHTML = '<div class="alert alert-warning">⚠️ Введите домен или полный URL вебхука</div>';
+        return;
+    }
+
+    errorEl.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Регистрация вебхука в iiko Cloud...</div>';
+    resultEl.style.display = 'none';
+
+    try {
+        const payload = {
+            setting_id: parseInt(settingId),
+            webhook_url: webhookUrl
+        };
+        if (authToken) {
+            payload.auth_token = authToken;
+        }
+
+        const result = await apiPost('/admin/api/webhooks/register', payload);
+
+        if (result.status >= 400) {
+            errorEl.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>';
+        } else {
+            errorEl.innerHTML = '';
+            resultEl.style.display = 'block';
+            document.getElementById('webhook-generated-url').textContent = result.data.webhook_url || '—';
+            document.getElementById('webhook-auth-token').textContent = result.data.auth_token || '—';
+            
+            // Refresh current webhook info
+            onWebhookSettingChange();
+        }
+    } catch (err) {
+        errorEl.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>';
+    }
+}
+
+function onWebhookSettingChange() {
+    const settingId = document.getElementById('webhook-setting-select').value;
+    const container = document.getElementById('current-webhook-info');
+    if (!settingId) {
+        container.innerHTML = '<span class="badge badge-muted">Выберите настройку iiko для просмотра</span>';
+        return;
+    }
+    const setting = settingsList.find(s => s.id == settingId);
+    if (setting) {
+        let html = '';
+        if (setting.webhook_url) {
+            html += '<div class="component-row"><div class="component-name" style="flex-direction:column;align-items:flex-start;">' +
+                '<span class="form-label" style="margin-bottom:2px;">URL вебхука:</span>' +
+                '<span class="mono" style="color:var(--accent);word-break:break-all;">' + escapeHtml(setting.webhook_url) + '</span>' +
+            '</div></div>';
+            html += '<div class="component-row"><div class="component-name">' +
+                '<span class="badge badge-success">✓ Вебхук настроен</span>' +
+            '</div></div>';
+        } else {
+            html += '<span class="badge badge-warning">⚠️ Вебхук не настроен для этой интеграции</span>';
+        }
+        container.innerHTML = html;
+    }
+}
+
+async function loadWebhookEvents() {
+    const container = document.getElementById('webhook-events-list');
+    container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>';
+
+    try {
+        const resp = await apiGet('/admin/api/webhook-events');
+        const data = resp.data;
+        const events = Array.isArray(data) ? data : [];
+        if (events.length === 0) {
+            container.innerHTML = '<span class="badge badge-muted">Нет входящих событий</span>';
+            return;
+        }
+        let html = '<div class="table-wrap"><table><thead><tr><th>ID</th><th>Тип</th><th>Обработан</th><th>Дата</th><th>Данные</th></tr></thead><tbody>';
+        events.forEach(e => {
+            let payloadPreview = '—';
+            if (e.payload) {
+                try {
+                    const p = JSON.parse(e.payload);
+                    const keys = Object.keys(p).slice(0, 3).join(', ');
+                    payloadPreview = keys + (Object.keys(p).length > 3 ? '...' : '');
+                } catch(parseErr) {
+                    payloadPreview = escapeHtml(String(e.payload).substring(0, 50)) + '...';
+                }
+            }
+            html += '<tr>' +
+                '<td>' + e.id + '</td>' +
+                '<td><span class="badge badge-muted">' + escapeHtml(e.event_type) + '</span></td>' +
+                '<td><span class="badge ' + (e.processed ? 'badge-success' : 'badge-warning') + '">' + (e.processed ? '✓' : '⏳') + '</span></td>' +
+                '<td style="font-size:12px;color:var(--muted);">' + (e.created_at || '—') + '</td>' +
+                '<td style="font-size:11px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(payloadPreview) + '</td>' +
+                '</tr>';
+        });
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    } catch (err) {
+        container.innerHTML = '<div class="alert alert-danger">⚠️ ' + escapeHtml(err.message) + '</div>';
+    }
+}
+
+// ─── Data Tab ────────────────────────────────────────────
+function getActiveSettingAndOrg() {
+    if (!currentSettingId) return { error: 'Сначала создайте настройку API на вкладке «⚙️ Настройки API»' };
+    const setting = settingsList.find(s => s.id === currentSettingId);
+    if (!setting) return { error: 'Настройка не найдена' };
+    if (!setting.organization_id) return { error: 'Укажите Organization ID в настройках API' };
+    return { settingId: currentSettingId, orgId: setting.organization_id };
+}
+
+async function loadDataSection(type) {
+    const container = document.getElementById('data-' + type);
+    const ctx = getActiveSettingAndOrg();
+
+    if (ctx.error) {
+        container.innerHTML = '<div class="alert alert-warning">⚠️ ' + escapeHtml(ctx.error) + '</div>';
+        return;
+    }
+
+    container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>';
+
+    const endpoints = {
+        'terminal-groups': '/admin/api/iiko-terminal-groups',
+        'payment-types': '/admin/api/iiko-payment-types',
+        'couriers': '/admin/api/iiko-couriers',
+        'order-types': '/admin/api/iiko-order-types',
+        'discount-types': '/admin/api/iiko-discount-types',
+        'stop-lists': '/admin/api/iiko-stop-lists',
+        'cancel-causes': '/admin/api/iiko-cancel-causes',
+        'removal-types': '/admin/api/iiko-removal-types',
+        'tips-types': '/admin/api/iiko-tips-types',
+        'delivery-restrictions': '/admin/api/iiko-delivery-restrictions',
+        'cities': '/admin/api/iiko-cities',
+        'regions': '/admin/api/iiko-regions',
+        'marketing-sources': '/admin/api/iiko-marketing-sources',
+        'organization-settings': '/admin/api/iiko-organization-settings',
+        'terminal-groups-alive': '/admin/api/iiko-terminal-groups-alive',
+        'couriers-location': '/admin/api/iiko-couriers-location',
+        'combo': '/admin/api/iiko-combo',
+        'customer-categories': '/admin/api/iiko-customer-categories',
+    };
+
+    try {
+        const result = await apiPost(endpoints[type], {
+            setting_id: ctx.settingId,
+            organization_id: ctx.orgId,
+        });
+
+        if (result.status >= 400) {
+            container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>';
+            return;
+        }
+
+        const data = result.data;
+        let html = '<div class="data-section">';
+
+        if (type === 'terminal-groups') {
+            const groups = data.terminalGroups || [];
+            if (groups.length === 0) {
+                html += '<span class="badge badge-muted">Нет данных</span>';
+            } else {
+                groups.forEach(g => {
+                    const items = g.items || [];
+                    html += '<div style="margin-bottom:8px;font-weight:600;">Организация: ' + escapeHtml(g.organizationId || '').substring(0,8) + '...</div>';
+                    items.forEach(item => {
+                        html += '<div class="component-row"><div class="component-name"><span class="status-dot online"></span>' + escapeHtml(item.name || item.id) + '</div><span class="mono" style="color:var(--muted);font-size:11px;">' + escapeHtml(item.id || '') + '</span></div>';
+                    });
+                });
+            }
+        } else if (type === 'payment-types') {
+            const ptGroups = data.paymentTypes || [];
+            if (ptGroups.length === 0) {
+                html += '<span class="badge badge-muted">Нет данных</span>';
+            } else {
+                ptGroups.forEach(pt => {
+                    const items = pt.items || pt.paymentTypes || [];
+                    if (items.length > 0) {
+                        html += '<div class="table-wrap" style="margin-bottom:8px;"><table><thead><tr><th>Название</th><th>Тип</th><th>Код</th><th>ID</th></tr></thead><tbody>';
+                        items.forEach(item => {
+                            html += '<tr>' +
+                                '<td><strong>💳 ' + escapeHtml(item.name || '—') + '</strong></td>' +
+                                '<td><span class="badge badge-muted">' + escapeHtml(item.paymentTypeKind || item.code || '') + '</span></td>' +
+                                '<td class="mono" style="font-size:11px;">' + escapeHtml(item.code || '') + '</td>' +
+                                '<td class="mono" style="font-size:11px;color:var(--muted);">' + escapeHtml((item.id || '').substring(0,8)) + '...</td>' +
+                            '</tr>';
+                        });
+                        html += '</tbody></table></div>';
+                    }
+                });
+            }
+        } else if (type === 'couriers') {
+            const couriers = data.employees || [];
+            if (couriers.length === 0) {
+                html += '<span class="badge badge-muted">Нет курьеров</span>';
+            } else {
+                html += '<div class="table-wrap"><table><thead><tr><th>Имя</th><th>Телефон</th><th>ID</th></tr></thead><tbody>';
+                couriers.forEach(c => {
+                    html += '<tr>' +
+                        '<td><strong>🚴 ' + escapeHtml(c.displayName || c.name || c.firstName || '—') + '</strong></td>' +
+                        '<td>' + escapeHtml(c.phone || '—') + '</td>' +
+                        '<td class="mono" style="font-size:11px;color:var(--muted);">' + escapeHtml((c.id || '').substring(0,8)) + '...</td>' +
+                    '</tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+        } else if (type === 'order-types') {
+            const otGroups = data.orderTypes || [];
+            if (otGroups.length === 0) {
+                html += '<span class="badge badge-muted">Нет типов заказов</span>';
+            } else {
+                otGroups.forEach(og => {
+                    const items = og.items || og.orderTypes || [];
+                    if (items.length > 0) {
+                        html += '<div class="table-wrap" style="margin-bottom:8px;"><table><thead><tr><th>Название</th><th>Тип</th><th>Внешнее</th><th>ID</th></tr></thead><tbody>';
+                        items.forEach(item => {
+                            html += '<tr>' +
+                                '<td><strong>📦 ' + escapeHtml(item.name || '—') + '</strong></td>' +
+                                '<td><span class="badge badge-muted">' + escapeHtml(item.orderServiceType || '') + '</span></td>' +
+                                '<td>' + escapeHtml(item.externalRevision ? 'Да' : 'Нет') + '</td>' +
+                                '<td class="mono" style="font-size:11px;color:var(--muted);">' + escapeHtml((item.id || '').substring(0,8)) + '...</td>' +
+                            '</tr>';
+                        });
+                        html += '</tbody></table></div>';
+                    }
+                });
+            }
+        } else if (type === 'discount-types') {
+            const discounts = data.discounts || data.discountTypes || [];
+            if (discounts.length === 0 && !data.discounts) {
+                // Try alternate format
+                const dgGroups = Object.values(data).flat();
+                if (dgGroups.length === 0) {
+                    html += '<span class="badge badge-muted">Нет скидок/акций</span>';
+                } else {
+                    html += '<div class="json-view">' + escapeHtml(JSON.stringify(data, null, 2)) + '</div>';
+                }
+            } else {
+                const items = Array.isArray(discounts) ? discounts : [];
+                if (items.length === 0) {
+                    html += '<span class="badge badge-muted">Нет скидок/акций</span>';
+                } else {
+                    html += '<div class="table-wrap"><table><thead><tr><th>Название</th><th>Тип</th><th>Процент / Сумма</th><th>ID</th></tr></thead><tbody>';
+                    items.forEach(item => {
+                        html += '<tr>' +
+                            '<td><strong>🏷️ ' + escapeHtml(item.name || '—') + '</strong></td>' +
+                            '<td><span class="badge badge-muted">' + escapeHtml(item.type || item.discountType || '') + '</span></td>' +
+                            '<td>' + escapeHtml(item.percent ? item.percent + '%' : (item.sum || '—')) + '</td>' +
+                            '<td class="mono" style="font-size:11px;color:var(--muted);">' + escapeHtml((item.id || '').substring(0,8)) + '...</td>' +
+                        '</tr>';
+                    });
+                    html += '</tbody></table></div>';
+                }
+            }
+        } else if (type === 'stop-lists') {
+            const stopLists = data.terminalGroupStopLists || [];
+            if (stopLists.length === 0) {
+                html += '<span class="badge badge-muted">Нет данных стоп-листов</span>';
+            } else {
+                stopLists.forEach(tg => {
+                    const tgItems = tg.items || [];
+                    tgItems.forEach(terminal => {
+                        html += '<div style="margin-bottom:8px;font-weight:600;">Терминал: ' + escapeHtml(terminal.terminalGroupId || '').substring(0,8) + '...</div>';
+                        const stopItems = terminal.items || [];
+                        if (stopItems.length === 0) {
+                            html += '<span class="badge badge-success" style="margin-bottom:8px;">✓ Стоп-лист пуст</span>';
+                        } else {
+                            html += '<div class="table-wrap" style="margin-bottom:8px;"><table><thead><tr><th>Позиция</th><th>Баланс</th></tr></thead><tbody>';
+                            stopItems.forEach(si => {
+                                html += '<tr><td>🚫 ' + escapeHtml(si.productId || si.name || '—') + '</td><td>' + (si.balance || 0) + '</td></tr>';
+                            });
+                            html += '</tbody></table></div>';
+                        }
+                    });
+                });
+            }
+        } else if (type === 'cancel-causes') {
+            const causes = data.cancelCauses || data.causes || [];
+            if (Array.isArray(causes) && causes.length > 0) {
+                html += '<div class="table-wrap"><table><thead><tr><th>Название</th><th>ID</th></tr></thead><tbody>';
+                causes.forEach(c => {
+                    html += '<tr><td><strong>❌ ' + escapeHtml(c.name || '—') + '</strong></td>' +
+                        '<td class="mono" style="font-size:11px;color:var(--muted);">' + escapeHtml(c.id || '') + '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+            } else {
+                html += '<pre style="font-size:12px;max-height:300px;overflow:auto;">' + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+            }
+        } else if (type === 'removal-types') {
+            const types = data.removalTypes || [];
+            if (Array.isArray(types) && types.length > 0) {
+                html += '<div class="table-wrap"><table><thead><tr><th>Название</th><th>ID</th></tr></thead><tbody>';
+                types.forEach(r => {
+                    html += '<tr><td><strong>🗑️ ' + escapeHtml(r.name || '—') + '</strong></td>' +
+                        '<td class="mono" style="font-size:11px;color:var(--muted);">' + escapeHtml(r.id || '') + '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+            } else {
+                html += '<pre style="font-size:12px;max-height:300px;overflow:auto;">' + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+            }
+        } else if (type === 'tips-types') {
+            const tips = data.tipsTypes || data.tips || [];
+            if (Array.isArray(tips) && tips.length > 0) {
+                html += '<div class="table-wrap"><table><thead><tr><th>Название</th><th>ID</th></tr></thead><tbody>';
+                tips.forEach(t => {
+                    html += '<tr><td><strong>💵 ' + escapeHtml(t.name || '—') + '</strong></td>' +
+                        '<td class="mono" style="font-size:11px;color:var(--muted);">' + escapeHtml(t.id || '') + '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+            } else {
+                html += '<pre style="font-size:12px;max-height:300px;overflow:auto;">' + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+            }
+        } else if (type === 'delivery-restrictions') {
+            html += '<pre style="font-size:12px;max-height:400px;overflow:auto;">' + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+        } else if (type === 'cities') {
+            const cities = data.cities || [];
+            if (Array.isArray(cities) && cities.length > 0) {
+                html += '<div class="table-wrap"><table><thead><tr><th>Город</th><th>ID</th></tr></thead><tbody>';
+                cities.forEach(c => {
+                    html += '<tr><td><strong>🏙️ ' + escapeHtml(c.name || '—') + '</strong></td>' +
+                        '<td class="mono" style="font-size:11px;color:var(--muted);">' + escapeHtml(c.id || '') + '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+            } else {
+                html += '<pre style="font-size:12px;max-height:300px;overflow:auto;">' + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+            }
+        } else if (type === 'regions') {
+            const regions = data.regions || [];
+            if (Array.isArray(regions) && regions.length > 0) {
+                html += '<div class="table-wrap"><table><thead><tr><th>Регион</th><th>ID</th></tr></thead><tbody>';
+                regions.forEach(r => {
+                    html += '<tr><td><strong>🌍 ' + escapeHtml(r.name || '—') + '</strong></td>' +
+                        '<td class="mono" style="font-size:11px;color:var(--muted);">' + escapeHtml(r.id || '') + '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+            } else {
+                html += '<pre style="font-size:12px;max-height:300px;overflow:auto;">' + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+            }
+        } else if (type === 'marketing-sources') {
+            const sources = data.marketingSources || [];
+            if (Array.isArray(sources) && sources.length > 0) {
+                html += '<div class="table-wrap"><table><thead><tr><th>Название</th><th>ID</th></tr></thead><tbody>';
+                sources.forEach(s => {
+                    html += '<tr><td><strong>📣 ' + escapeHtml(s.name || '—') + '</strong></td>' +
+                        '<td class="mono" style="font-size:11px;color:var(--muted);">' + escapeHtml(s.id || '') + '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+            } else {
+                html += '<pre style="font-size:12px;max-height:300px;overflow:auto;">' + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+            }
+        } else if (type === 'organization-settings') {
+            html += '<pre style="font-size:12px;max-height:400px;overflow:auto;">' + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+        } else if (type === 'terminal-groups-alive') {
+            const alive = data.isAliveState || [];
+            if (Array.isArray(alive) && alive.length > 0) {
+                html += '<div class="table-wrap"><table><thead><tr><th>Терминал</th><th>Статус</th></tr></thead><tbody>';
+                alive.forEach(a => {
+                    const items = a.items || [];
+                    items.forEach(item => {
+                        const statusBadge = item.isAlive ? '<span class="badge badge-success">🟢 Доступен</span>' : '<span class="badge badge-danger">🔴 Недоступен</span>';
+                        html += '<tr><td class="mono" style="font-size:12px;">' + escapeHtml(item.terminalGroupId || '—') + '</td>' +
+                            '<td>' + statusBadge + '</td></tr>';
+                    });
+                });
+                html += '</tbody></table></div>';
+            } else {
+                html += '<pre style="font-size:12px;max-height:300px;overflow:auto;">' + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+            }
+        } else if (type === 'couriers-location') {
+            html += '<pre style="font-size:12px;max-height:400px;overflow:auto;">' + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+        } else if (type === 'combo') {
+            html += '<pre style="font-size:12px;max-height:400px;overflow:auto;">' + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+        } else if (type === 'customer-categories') {
+            const cats = data.guestCategories || data.customerCategories || [];
+            if (Array.isArray(cats) && cats.length > 0) {
+                html += '<div class="table-wrap"><table><thead><tr><th>Категория</th><th>Активна</th><th>ID</th></tr></thead><tbody>';
+                cats.forEach(c => {
+                    html += '<tr><td><strong>👥 ' + escapeHtml(c.name || '—') + '</strong></td>' +
+                        '<td>' + (c.isActive !== false ? '✅' : '❌') + '</td>' +
+                        '<td class="mono" style="font-size:11px;color:var(--muted);">' + escapeHtml(c.id || '') + '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+            } else {
+                html += '<pre style="font-size:12px;max-height:300px;overflow:auto;">' + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+            }
+        } else {
+            // Generic JSON display for other types
+            html += '<pre style="font-size:12px;max-height:400px;overflow:auto;">' + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+        }
+
+        html += '</div>';
+        container.innerHTML = html;
+    } catch (err) {
+        container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>';
+    }
+}
+
+// ─── iiko Deliveries ─────────────────────────────────────
+async function loadIikoDeliveries() {
+    const days = document.getElementById('deliveries-days-select').value || 1;
+    const container = document.getElementById('data-iiko-deliveries');
+    const ctx = getActiveSettingAndOrg();
+
+    if (ctx.error) {
+        container.innerHTML = '<div class="alert alert-warning">⚠️ ' + escapeHtml(ctx.error) + '</div>';
+        return;
+    }
+
+    const checkboxes = document.querySelectorAll('.maint-delivery-status-cb:checked');
+    const statuses = Array.from(checkboxes).map(cb => cb.value).join(',');
+    if (!statuses) {
+        container.innerHTML = '<div class="alert alert-warning">⚠️ Выберите хотя бы один статус</div>';
+        return;
+    }
+
+    container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка заказов из iiko...</div>';
+
+    try {
+        const result = await apiPost('/admin/api/iiko-deliveries', {
+            setting_id: ctx.settingId,
+            organization_id: ctx.orgId,
+            statuses: statuses,
+            days: parseInt(days),
+        });
+
+        if (result.status >= 400) {
+            container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>';
+            return;
+        }
+
+        const data = result.data;
+        const ordersByOrg = data.ordersByOrganizations || [];
+        let html = '<div class="data-section">';
+        
+        // Correct Russian pluralization for days
+        let daysWord = 'дней';
+        const lastDigit = days % 10;
+        const lastTwoDigits = days % 100;
+        if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
+            daysWord = 'дней';
+        } else if (lastDigit === 1) {
+            daysWord = 'день';
+        } else if (lastDigit >= 2 && lastDigit <= 4) {
+            daysWord = 'дня';
+        }
+        const daysLabel = days === 1 ? 'последний день' : `последние ${days} ${daysWord}`;
+
+        if (ordersByOrg.length === 0) {
+            html += `<span class="badge badge-muted">Нет заказов за ${daysLabel}</span>`;
+        } else {
+            ordersByOrg.forEach(orgOrders => {
+                const orders = orgOrders.orders || [];
+                html += '<div style="margin-bottom:8px;font-weight:600;">Заказов: ' + orders.length + '</div>';
+                if (orders.length === 0) {
+                    html += '<span class="badge badge-muted">Нет заказов</span>';
+                } else {
+                    html += '<div class="table-wrap"><table><thead><tr><th>ID</th><th>Номер</th><th>Статус</th><th>Клиент</th><th>Телефон</th><th>Сумма</th><th>Дата</th></tr></thead><tbody>';
+                    orders.forEach(o => {
+                        const statusBadge = {
+                            'Delivered': 'badge-success',
+                            'Closed': 'badge-muted',
+                            'Cancelled': 'badge-danger',
+                            'OnWay': 'badge-warning',
+                            'CookingStarted': 'badge-warning',
+                        };
+                        const badge = statusBadge[o.status] || 'badge-muted';
+                        const customer = o.customer || {};
+                        html += '<tr>' +
+                            '<td class="mono" style="font-size:11px;">' + escapeHtml((o.id || '').substring(0,8)) + '...</td>' +
+                            '<td><strong>' + escapeHtml(o.number || '—') + '</strong></td>' +
+                            '<td><span class="badge ' + badge + '">' + escapeHtml(o.status || '—') + '</span></td>' +
+                            '<td>' + escapeHtml(customer.name || '—') + '</td>' +
+                            '<td>' + escapeHtml(customer.phone || '—') + '</td>' +
+                            '<td style="font-weight:600;">' + (typeof o.sum === 'number' ? o.sum.toFixed(2) : (o.sum != null ? String(o.sum) : '—')) + '</td>' +
+                            '<td style="font-size:12px;color:var(--muted);">' + escapeHtml(o.whenCreated || '—') + '</td>' +
+                            '</tr>';
+                    });
+                    html += '</tbody></table></div>';
+                }
+            });
+        }
+
+        html += '</div>';
+        container.innerHTML = html;
+    } catch (err) {
+        container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>';
+    }
+}
+
+// ─── Logs Tab ────────────────────────────────────────────
+async function loadLogs() {
+    const container = document.getElementById('logs-list');
+    container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>';
+
+    try {
+        const resp = await apiGet('/admin/api/logs');
+        const data = resp.data;
+        const logs = Array.isArray(data) ? data : [];
+        if (logs.length === 0) {
+            container.innerHTML = '<span class="badge badge-muted">Нет записей</span>';
+            return;
+        }
+        let html = '<div class="table-wrap"><table><thead><tr><th>ID</th><th>Метод</th><th>URL</th><th>Статус</th><th>Время</th><th>Дата</th></tr></thead><tbody>';
+        logs.forEach(l => {
+            const isError = l.response_status >= 400;
+            html += '<tr>' +
+                '<td>' + l.id + '</td>' +
+                '<td><span class="badge badge-muted">' + escapeHtml(l.method) + '</span></td>' +
+                '<td class="mono" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(l.url) + '</td>' +
+                '<td><span class="badge ' + (isError ? 'badge-danger' : 'badge-success') + '">' + (l.response_status || '—') + '</span></td>' +
+                '<td>' + (l.duration_ms || '—') + ' мс</td>' +
+                '<td style="font-size:12px;color:var(--muted);">' + (l.created_at || '—') + '</td>' +
+                '</tr>';
+        });
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    } catch (err) {
+        container.innerHTML = '<div class="alert alert-danger">⚠️ ' + escapeHtml(err.message) + '</div>';
+    }
+}
+
+// ─── Loyalty Tab ─────────────────────────────────────────
+let currentCustomerId = null;
+let currentCustomerName = null;
+let currentCustomerPhone = null;
+let loyaltyProgramsList = [];
+let autoRefreshInterval = null;
+
+async function loadLoyaltyPrograms() {
+    if (!currentSettingId) { alert('Сначала создайте или выберите настройку API'); return; }
+    const setting = settingsList.find(s => s.id === currentSettingId);
+    if (!setting || !setting.organization_id) { alert('Укажите organization_id в настройках API'); return; }
+    const container = document.getElementById('loyalty-programs-list');
+    container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>';
+    try {
+        const result = await apiPost('/admin/api/iiko-loyalty-programs', { setting_id: currentSettingId, organization_id: setting.organization_id });
+        if (result.status >= 400) { container.innerHTML = '<div class="alert alert-danger">⚠️ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>'; return; }
+        const programs = result.data.programs || result.data || [];
+        loyaltyProgramsList = Array.isArray(programs) ? programs : [];
+        if (loyaltyProgramsList.length === 0) {
+            container.innerHTML = '<span class="badge badge-muted">Программы лояльности не найдены</span>';
+            document.getElementById('loyalty-wallet-select-section').style.display = 'none';
+            return;
+        }
+        let html = '';
+        const programSelect = document.getElementById('loyalty-active-program');
+        programSelect.innerHTML = '<option value="">— Выберите программу —</option>';
+        loyaltyProgramsList.forEach((p, idx) => {
+            html += '<div style="padding:10px;border-bottom:1px solid var(--border);">' +
+                '<div style="font-weight:600;color:var(--text-bright);">' + escapeHtml(p.name || p.id || '—') + '</div>' +
+                '<div style="font-size:12px;color:var(--muted);">ID: ' + escapeHtml(p.id || '—') + '</div>' +
+                (p.description ? '<div style="font-size:12px;color:var(--text);margin-top:4px;">' + escapeHtml(p.description) + '</div>' : '') +
+                '</div>';
+            programSelect.innerHTML += '<option value="' + idx + '" data-program-id="' + escapeHtml(p.id || '') + '">' + escapeHtml(p.name || p.id || 'Программа ' + (idx + 1)) + '</option>';
+        });
+        container.innerHTML = html;
+        document.getElementById('loyalty-wallet-select-section').style.display = 'block';
+        loadTransactionHistory();
+    } catch (err) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>'; }
+}
+
+function onProgramSelected() {
+    const select = document.getElementById('loyalty-active-program');
+    const idx = select.value;
+    const detail = document.getElementById('loyalty-program-detail');
+    if (idx === '' || !loyaltyProgramsList[idx]) {
+        detail.innerHTML = '';
+        return;
+    }
+    const p = loyaltyProgramsList[idx];
+    let html = '<div class="data-section" style="padding:8px;">' +
+        '<div style="font-weight:600;color:var(--accent);">✅ ' + escapeHtml(p.name || '—') + '</div>' +
+        '<div style="font-size:12px;color:var(--muted);margin-top:4px;">ID: <span class="mono">' + escapeHtml(p.id || '—') + '</span></div>';
+    if (p.wallets && Array.isArray(p.wallets) && p.wallets.length > 0) {
+        html += '<div style="margin-top:8px;font-size:13px;color:var(--text);">Кошельки программы:</div>';
+        p.wallets.forEach(w => {
+            html += '<div style="font-size:12px;color:var(--muted);padding:2px 0;">• ' + escapeHtml(w.name || w.id || '—') + ' (ID: ' + escapeHtml(w.id || '—') + ')</div>';
+        });
+    }
+    if (p.marketingCampaigns && Array.isArray(p.marketingCampaigns) && p.marketingCampaigns.length > 0) {
+        html += '<div style="margin-top:8px;font-size:13px;color:var(--text);">Маркетинговые кампании: ' + p.marketingCampaigns.length + '</div>';
+    }
+    html += '</div>';
+    detail.innerHTML = html;
+}
+
+async function searchLoyaltyCustomer() {
+    if (!currentSettingId) { alert('Сначала создайте или выберите настройку API'); return; }
+    const setting = settingsList.find(s => s.id === currentSettingId);
+    if (!setting || !setting.organization_id) { alert('Укажите organization_id в настройках API'); return; }
+    const query = document.getElementById('loyalty-search-query').value.trim();
+    const searchType = document.getElementById('loyalty-search-type').value;
+    if (!query) { alert('Введите значение для поиска'); return; }
+    const container = document.getElementById('loyalty-customer-info');
+    container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Поиск...</div>';
+    const body = { setting_id: currentSettingId, organization_id: setting.organization_id };
+    body[searchType] = query;
+    try {
+        const result = await apiPost('/admin/api/iiko-loyalty-customer-info', body);
+        if (result.status >= 400) { container.innerHTML = '<div class="alert alert-danger">⚠️ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>'; return; }
+        const customer = result.data;
+        currentCustomerId = customer.id || null;
+        currentCustomerName = customer.name || null;
+        currentCustomerPhone = customer.phone || null;
+        let html = '<div class="data-section">' +
+            '<div style="font-weight:600;color:var(--text-bright);margin-bottom:8px;">👤 ' + escapeHtml(customer.name || '—') + '</div>' +
+            '<div style="font-size:13px;color:var(--text);">ID: <span class="mono">' + escapeHtml(customer.id || '—') + '</span></div>' +
+            '<div style="font-size:13px;color:var(--text);">Телефон: ' + escapeHtml(customer.phone || '—') + '</div>' +
+            '<div style="font-size:13px;color:var(--text);">Email: ' + escapeHtml(customer.email || '—') + '</div>' +
+            '</div>';
+        container.innerHTML = html;
+        if (currentCustomerId) {
+            loadCustomerBalance();
+            loadTransactionHistory();
+        }
+    } catch (err) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>'; }
+}
+
+async function loadCustomerBalance() {
+    if (!currentSettingId || !currentCustomerId) return;
+    const setting = settingsList.find(s => s.id === currentSettingId);
+    if (!setting || !setting.organization_id) return;
+    const container = document.getElementById('loyalty-balance-section');
+    container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка баланса...</div>';
+    try {
+        const result = await apiPost('/admin/api/iiko-loyalty-balance', { setting_id: currentSettingId, organization_id: setting.organization_id, customer_id: currentCustomerId });
+        if (result.status >= 400) { container.innerHTML = '<div class="alert alert-danger">⚠️ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>'; return; }
+        const wallets = result.data.wallets || result.data || [];
+        let html = '<div class="grid-3">';
+        const walletSelect = document.getElementById('loyalty-wallet-id');
+        walletSelect.innerHTML = '';
+        if (Array.isArray(wallets) && wallets.length > 0) {
+            wallets.forEach(w => {
+                html += '<div class="card stat-card">' +
+                    '<span class="stat-label">' + escapeHtml(w.name || w.walletId || 'Кошелек') + '</span>' +
+                    '<span class="stat-value" style="font-size:24px;">' + (w.balance != null ? w.balance : '—') + '</span>' +
+                    '</div>';
+                walletSelect.innerHTML += '<option value="' + escapeHtml(w.walletId || w.id || '') + '">' + escapeHtml(w.name || w.walletId || 'Кошелек') + ' (баланс: ' + (w.balance || 0) + ')</option>';
+            });
+        } else {
+            html += '<span class="badge badge-muted">Кошельки не найдены</span>';
+        }
+        html += '</div>';
+        container.innerHTML = html;
+        document.getElementById('loyalty-operations').style.display = (Array.isArray(wallets) && wallets.length > 0) ? 'block' : 'none';
+    } catch (err) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>'; }
+}
+
+async function loyaltyTopup() { await loyaltyOperation('topup', '➕ Пополнение'); }
+async function loyaltyWithdraw() { await loyaltyOperation('withdraw', '➖ Списание'); }
+async function loyaltyHold() { await loyaltyOperation('hold', '🔒 Холдирование'); }
+
+async function loyaltyOperation(type, label) {
+    if (!currentSettingId || !currentCustomerId) { alert('Сначала найдите гостя'); return; }
+    const setting = settingsList.find(s => s.id === currentSettingId);
+    if (!setting || !setting.organization_id) return;
+    const walletId = document.getElementById('loyalty-wallet-id').value;
+    const amount = parseFloat(document.getElementById('loyalty-amount').value);
+    const comment = document.getElementById('loyalty-comment').value;
+    if (!walletId || !amount || amount <= 0) { alert('Укажите кошелек и сумму'); return; }
+    const container = document.getElementById('loyalty-operation-result');
+    container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Выполнение...</div>';
+    try {
+        const result = await apiPost('/admin/api/iiko-loyalty-' + type, {
+            setting_id: currentSettingId, organization_id: setting.organization_id,
+            customer_id: currentCustomerId, wallet_id: walletId, amount: amount, comment: comment,
+        });
+        if (result.status >= 400) { container.innerHTML = '<div class="alert alert-danger">⚠️ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>'; return; }
+        container.innerHTML = '<div class="alert alert-success">✅ ' + label + ' выполнено успешно</div>';
+        loadCustomerBalance();
+        loadTransactionHistory();
+    } catch (err) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>'; }
+}
+
+async function loadTransactionHistory() {
+    if (!currentSettingId) return;
+    const setting = settingsList.find(s => s.id === currentSettingId);
+    if (!setting || !setting.organization_id) return;
+    const container = document.getElementById('loyalty-transactions-list');
+    const params = new URLSearchParams({
+        setting_id: currentSettingId,
+        organization_id: setting.organization_id,
+        limit: 50,
+    });
+    if (currentCustomerId) params.append('customer_id', currentCustomerId);
+    try {
+        const result = await apiGet('/admin/api/iiko-loyalty-transactions?' + params.toString());
+        const transactions = Array.isArray(result.data) ? result.data : [];
+        if (transactions.length === 0) {
+            container.innerHTML = '<span class="badge badge-muted">Нет операций' + (currentCustomerId ? ' для данного гостя' : '') + '</span>';
+            return;
+        }
+        const opLabels = { topup: '➕ Пополнение', withdraw: '➖ Списание', hold: '🔒 Холд' };
+        const opBadge = { topup: 'badge-success', withdraw: 'badge-danger', hold: 'badge-muted' };
+        let html = '<div class="table-wrap"><table><thead><tr>' +
+            '<th>Дата</th><th>Тип</th><th>Сумма</th><th>Гость</th><th>Кошелек</th><th>Комментарий</th><th>Оператор</th>' +
+            '</tr></thead><tbody>';
+        transactions.forEach(t => {
+            const dt = t.created_at ? new Date(t.created_at).toLocaleString('ru-RU') : '—';
+            const custInfo = (t.customer_name || t.customer_phone) ?
+                escapeHtml(t.customer_name || '') + (t.customer_phone ? ' (' + escapeHtml(t.customer_phone) + ')' : '') :
+                '<span class="mono" style="font-size:11px;">' + escapeHtml(t.customer_id || '—') + '</span>';
+            html += '<tr>' +
+                '<td style="font-size:12px;white-space:nowrap;">' + dt + '</td>' +
+                '<td><span class="badge ' + (opBadge[t.operation_type] || 'badge-muted') + '">' + (opLabels[t.operation_type] || t.operation_type) + '</span></td>' +
+                '<td style="font-weight:600;">' + (t.amount != null ? t.amount.toFixed(2) : '—') + '</td>' +
+                '<td>' + custInfo + '</td>' +
+                '<td style="font-size:12px;">' + escapeHtml(t.wallet_name || t.wallet_id || '—') + '</td>' +
+                '<td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(t.comment || '—') + '</td>' +
+                '<td style="font-size:12px;">' + escapeHtml(t.performed_by || '—') + '</td>' +
+                '</tr>';
+        });
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    } catch (err) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>'; }
+}
+
+function toggleAutoRefresh() {
+    const checked = document.getElementById('loyalty-auto-refresh').checked;
+    if (checked) {
+        autoRefreshInterval = setInterval(() => {
+            loadTransactionHistory();
+            if (currentCustomerId) loadCustomerBalance();
+        }, 10000);
+    } else {
+        if (autoRefreshInterval) { clearInterval(autoRefreshInterval); autoRefreshInterval = null; }
+    }
+}
+
+async function createOrUpdateCustomer() {
+    if (!currentSettingId) { alert('Сначала создайте или выберите настройку API'); return; }
+    const setting = settingsList.find(s => s.id === currentSettingId);
+    if (!setting || !setting.organization_id) { alert('Укажите organization_id в настройках API'); return; }
+    const container = document.getElementById('new-customer-result');
+    container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Сохранение...</div>';
+    const body = {
+        setting_id: currentSettingId,
+        organization_id: setting.organization_id,
+        name: document.getElementById('new-customer-name').value.trim(),
+        phone: document.getElementById('new-customer-phone').value.trim(),
+        email: document.getElementById('new-customer-email').value.trim(),
+        birthday: document.getElementById('new-customer-birthday').value || null,
+    };
+    if (!body.name && !body.phone) { container.innerHTML = '<div class="alert alert-danger">Укажите имя или телефон</div>'; return; }
+    try {
+        const result = await apiPost('/admin/api/iiko-loyalty-customer', body);
+        if (result.status >= 400) { container.innerHTML = '<div class="alert alert-danger">⚠️ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>'; return; }
+        container.innerHTML = '<div class="alert alert-success">✅ Гость сохранен. ID: ' + escapeHtml(result.data.id || JSON.stringify(result.data)) + '</div>';
+    } catch (err) { container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>'; }
+}
+
+// ─── Synchronization Functions ──────────────────────────
+async function syncData(type) {
+    if (!currentSettingId) {
+        alert('Сначала создайте настройку API на вкладке «⚙️ Настройки API»');
+        return;
+    }
+    
+    const progressDiv = document.getElementById('sync-progress');
+    const resultDiv = document.getElementById('sync-result');
+    const statusText = document.getElementById('sync-status-text');
+    
+    progressDiv.style.display = 'block';
+    resultDiv.innerHTML = '';
+    statusText.textContent = `Синхронизация ${type}...`;
+    
+    // Disable all sync buttons
+    const buttons = ['btn-sync-full', 'btn-sync-menu', 'btn-sync-stoplist', 'btn-sync-terminals', 'btn-sync-payments'];
+    buttons.forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.disabled = true;
+    });
+    
+    try {
+        const result = await apiPost(`/admin/api/sync/${type}`, { setting_id: currentSettingId });
+        
+        if (result.status >= 400) {
+            resultDiv.innerHTML = '<div class="alert alert-danger">❌ Ошибка: ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>';
+        } else {
+            const data = result.data;
+            let html = '<div class="alert alert-success">';
+            html += '<div style="font-weight:600;margin-bottom:8px;">✅ Синхронизация завершена</div>';
+            
+            if (data.results) {
+                html += '<div style="font-size:13px;">';
+                Object.keys(data.results).forEach(key => {
+                    const r = data.results[key];
+                    const synced = r.synced || 0;
+                    const duration = r.duration_ms || 0;
+                    html += `<div>• ${key}: ${synced} записей (${duration}мс)</div>`;
+                });
+                html += '</div>';
+            }
+            
+            if (data.duration_ms) {
+                html += `<div style="margin-top:8px;font-size:12px;color:var(--muted);">Общее время: ${data.duration_ms}мс</div>`;
+            }
+            
+            html += '</div>';
+            resultDiv.innerHTML = html;
+            
+            // Reload sync history
+            loadSyncHistory();
+        }
+    } catch (err) {
+        resultDiv.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>';
+    } finally {
+        progressDiv.style.display = 'none';
+        // Re-enable sync buttons
+        buttons.forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) btn.disabled = false;
+        });
+    }
+}
+
+async function loadSyncHistory() {
+    const container = document.getElementById('sync-history-list');
+    container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>';
+    
+    try {
+        const orgId = currentOrgId || null;
+        let url = '/admin/api/sync/history?limit=20';
+        if (orgId) url += `&organization_id=${encodeURIComponent(orgId)}`;
+        
+        const result = await apiGet(url);
+        
+        if (result.status >= 400) {
+            container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>';
+            return;
+        }
+        
+        const history = result.data.history || [];
+        
+        if (result.data.error) {
+            container.innerHTML = '<div class="alert alert-warning">⚠️ ' + escapeHtml(result.data.error) + '</div>';
+            return;
+        }
+        
+        if (history.length === 0) {
+            container.innerHTML = '<span class="badge badge-muted">История синхронизаций пуста</span>';
+            return;
+        }
+        
+        let html = '<div class="table-wrap"><table><thead><tr>';
+        html += '<th>Тип</th><th>Статус</th><th>Записей</th><th>Длительность</th><th>Дата</th><th>Ошибка</th>';
+        html += '</tr></thead><tbody>';
+        
+        history.forEach(h => {
+            const statusBadge = h.status === 'success' ? 'badge-success' : (h.status === 'failed' ? 'badge-danger' : 'badge-warning');
+            html += '<tr>';
+            html += `<td><strong>${escapeHtml(h.sync_type)}</strong></td>`;
+            html += `<td><span class="badge ${statusBadge}">${escapeHtml(h.status)}</span></td>`;
+            html += `<td>${h.items_synced || 0}</td>`;
+            html += `<td>${h.duration_ms || 0}мс</td>`;
+            html += `<td style="font-size:12px;">${h.completed_at ? new Date(h.completed_at).toLocaleString('ru-RU') : '—'}</td>`;
+            html += `<td style="font-size:11px;color:var(--danger);">${h.error_message ? escapeHtml(h.error_message.substring(0, 50)) : '—'}</td>`;
+            html += '</tr>';
+        });
+        
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    } catch (err) {
+        container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>';
+    }
+}
+
+async function loadSyncedData(type) {
+    const container = document.getElementById('synced-data-view');
+    container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка...</div>';
+    
+    try {
+        const orgId = currentOrgId || null;
+        let url = `/admin/api/data/${type}`;
+        if (orgId) url += `?organization_id=${encodeURIComponent(orgId)}`;
+        
+        const result = await apiGet(url);
+        
+        if (result.status >= 400) {
+            container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>';
+            return;
+        }
+        
+        const data = result.data;
+        let html = '<div class="data-section">';
+        
+        // Show migration error if present
+        if (data.error) {
+            html += '<div class="alert alert-warning">⚠️ ' + escapeHtml(data.error) + '</div>';
+        }
+        
+        if (type === 'categories') {
+            const categories = data.categories || [];
+            if (categories.length === 0) {
+                html += '<div class="alert alert-warning">⚠️ Нет данных. Сначала выполните <strong>Полную синхронизацию</strong> на вкладке "Синхронизация".</div>';
+            } else {
+                html += `<div style="margin-bottom:12px;font-weight:600;">Категорий: ${categories.length}</div>`;
+                html += '<div class="table-wrap"><table><thead><tr><th>Название</th><th>Родительская</th><th>Активна</th><th>Видима</th><th>Синхронизирована</th></tr></thead><tbody>';
+                categories.forEach(c => {
+                    html += '<tr>';
+                    html += `<td><strong>📂 ${escapeHtml(c.name)}</strong></td>`;
+                    html += `<td style="font-size:11px;">${c.parent_id ? escapeHtml(c.parent_id.substring(0, 8)) : '—'}</td>`;
+                    html += `<td><span class="badge ${c.is_active ? 'badge-success' : 'badge-muted'}">${c.is_active ? 'Да' : 'Нет'}</span></td>`;
+                    html += `<td><span class="badge ${c.is_visible ? 'badge-success' : 'badge-muted'}">${c.is_visible ? 'Да' : 'Нет'}</span></td>`;
+                    html += `<td style="font-size:11px;">${c.synced_at ? new Date(c.synced_at).toLocaleString('ru-RU') : '—'}</td>`;
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+        } else if (type === 'products') {
+            const products = data.products || [];
+            if (products.length === 0) {
+                html += '<div class="alert alert-warning">⚠️ Нет данных. Сначала выполните <strong>Полную синхронизацию</strong> на вкладке "Синхронизация".</div>';
+            } else {
+                html += `<div style="margin-bottom:12px;font-weight:600;">Товаров: ${products.length}</div>`;
+                html += '<div class="table-wrap"><table><thead><tr><th>Название</th><th>Код</th><th>Цена</th><th>Доступен</th><th>Виден</th><th>Вес</th></tr></thead><tbody>';
+                products.forEach(p => {
+                    html += '<tr>';
+                    html += `<td><strong>🍕 ${escapeHtml(p.name)}</strong></td>`;
+                    html += `<td class="mono" style="font-size:11px;">${escapeHtml(p.code || '—')}</td>`;
+                    html += `<td style="font-weight:600;">${(p.price / 100).toFixed(2)} ₽</td>`;
+                    html += `<td><span class="badge ${p.is_available ? 'badge-success' : 'badge-danger'}">${p.is_available ? 'Да' : 'Нет'}</span></td>`;
+                    html += `<td><span class="badge ${p.is_visible ? 'badge-success' : 'badge-muted'}">${p.is_visible ? 'Да' : 'Нет'}</span></td>`;
+                    html += `<td>${p.weight ? p.weight + 'г' : '—'}</td>`;
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+        } else if (type === 'stop-lists') {
+            const stopLists = data.stop_lists || [];
+            if (stopLists.length === 0) {
+                html += '<span class="badge badge-success">✅ Стоп-лист пуст</span>';
+            } else {
+                html += `<div style="margin-bottom:12px;font-weight:600;">Позиций в стоп-листе: ${stopLists.length}</div>`;
+                html += '<div class="table-wrap"><table><thead><tr><th>Товар</th><th>Терминал</th><th>Остаток</th><th>Обновлено</th></tr></thead><tbody>';
+                stopLists.forEach(s => {
+                    html += '<tr>';
+                    html += `<td><strong>🚫 ${escapeHtml(s.product_name || s.product_id)}</strong></td>`;
+                    html += `<td style="font-size:11px;">${s.terminal_group_id ? escapeHtml(s.terminal_group_id.substring(0, 8)) : 'Все'}</td>`;
+                    html += `<td>${s.balance || 0}</td>`;
+                    html += `<td style="font-size:11px;">${s.updated_at ? new Date(s.updated_at).toLocaleString('ru-RU') : '—'}</td>`;
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+        }
+        
+        html += '</div>';
+        container.innerHTML = html;
+    } catch (err) {
+        container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>';
+    }
+}
+
+// ─── Enhanced Webhook Functions ─────────────────────────
+async function testWebhook() {
+    const settingId = document.getElementById('webhook-setting-select').value;
+    if (!settingId) {
+        alert('Выберите настройку iiko');
+        return;
+    }
+    
+    const errorDiv = document.getElementById('webhook-error');
+    errorDiv.innerHTML = '<div style="padding:12px;background:rgba(99,102,241,0.1);border-radius:8px;"><span class="spinner" style="width:16px;height:16px;"></span> Тестирование вебхука...</div>';
+    
+    try {
+        const result = await apiPost('/admin/api/webhooks/test', { setting_id: parseInt(settingId) });
+        
+        if (result.status >= 400) {
+            errorDiv.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>';
+        } else {
+            const data = result.data;
+            if (data.status === 'success') {
+                errorDiv.innerHTML = `<div class="alert alert-success">✅ Вебхук работает! Статус ответа: ${data.response_status}</div>`;
+            } else {
+                errorDiv.innerHTML = `<div class="alert alert-danger">❌ Ошибка: ${escapeHtml(data.error || 'Unknown error')}</div>`;
+            }
+        }
+    } catch (err) {
+        errorDiv.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>';
+    }
+}
+
+async function getWebhookSettings() {
+    const settingId = document.getElementById('webhook-setting-select').value;
+    if (!settingId) {
+        alert('Выберите настройку iiko');
+        return;
+    }
+    
+    const container = document.getElementById('iiko-webhook-settings');
+    container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Загрузка настроек из iiko...</div>';
+    
+    try {
+        const result = await apiGet(`/admin/api/webhooks/settings?setting_id=${settingId}`);
+        
+        if (result.status >= 400) {
+            container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(result.data.detail || JSON.stringify(result.data)) + '</div>';
+        } else {
+            const data = result.data;
+            let html = '<div class="data-section">';
+            html += `<div style="margin-bottom:8px;"><strong>URL:</strong> ${data.webHooksUri ? escapeHtml(data.webHooksUri) : 'Не настроен'}</div>`;
+            html += `<div style="margin-bottom:8px;"><strong>Статус:</strong> <span class="badge ${data.webHooksUri ? 'badge-success' : 'badge-muted'}">${data.webHooksUri ? 'Настроен' : 'Не настроен'}</span></div>`;
+            if (data.webHooksFilter) {
+                html += '<div style="margin-top:12px;"><strong>Фильтры событий:</strong></div>';
+                html += '<pre style="font-size:11px;max-height:300px;overflow:auto;margin-top:8px;">' + escapeHtml(JSON.stringify(data.webHooksFilter, null, 2)) + '</pre>';
+            }
+            html += '</div>';
+            container.innerHTML = html;
+        }
+    } catch (err) {
+        container.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml(err.message) + '</div>';
+    }
+}
+
+function toggleApiKeyVisibility() {
+    const input = document.getElementById('api-key-input');
+    const icon = document.getElementById('api-key-toggle-icon');
+    const button = document.getElementById('api-key-toggle-btn');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.textContent = '🙈';
+        button.setAttribute('aria-label', 'Скрыть API ключ');
+    } else {
+        input.type = 'password';
+        icon.textContent = '👁';
+        button.setAttribute('aria-label', 'Показать API ключ');
+    }
+}
+
+// ─── Init ────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+    loadStatus();
+});
+</script>
+@endsection

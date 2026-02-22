@@ -1,0 +1,7 @@
+{
+  "info": {
+    "name": "iiko Webhook Processor",
+    "description": "Коллекция для тестирования вебхуков iiko",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  }
+}

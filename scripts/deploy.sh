@@ -14,6 +14,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
+# Константы для таймаутов
+DB_CHECK_TIMEOUT=10  # Таймаут для проверки подключения к БД (секунды)
+
 print_info() {
     echo -e "${GREEN}[INFO]${NC} $1"
 }
@@ -79,9 +82,54 @@ php artisan view:cache
 cd ..
 
 # Применение миграций базы данных (Laravel)
-print_info "Применение миграций..."
+print_info "Проверка подключения к базе данных..."
 cd frontend
-php artisan migrate --force || print_warning "Миграции не выполнены"
+
+# Загрузка настроек БД из .env
+if [ -f .env ]; then
+    DB_HOST=$(grep "^DB_HOST=" .env | cut -d'=' -f2 | tr -d ' ')
+    DB_PORT=$(grep "^DB_PORT=" .env | cut -d'=' -f2 | tr -d ' ')
+    DB_USER=$(grep "^DB_USERNAME=" .env | cut -d'=' -f2 | tr -d ' ')
+    DB_PASSWORD=$(grep "^DB_PASSWORD=" .env | cut -d'=' -f2 | tr -d ' ')
+    DB_NAME=$(grep "^DB_DATABASE=" .env | cut -d'=' -f2 | tr -d ' ')
+    
+    # Проверка подключения к БД перед миграциями
+    # Используем прямое подключение к PostgreSQL без зависимостей Laravel
+    export PGPASSWORD="$DB_PASSWORD"
+    export PGCONNECT_TIMEOUT=5
+    
+    if timeout "$DB_CHECK_TIMEOUT" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c '\q' 2>/dev/null; then
+        print_info "✓ Подключение к БД успешно"
+        print_info "Применение миграций..."
+        php artisan migrate --force || print_warning "Миграции не выполнены"
+    else
+        print_warning "Не удалось подключиться к базе данных"
+        print_info "Проверьте настройки БД в файле .env:"
+        print_info "  - DB_HOST, DB_PORT, DB_DATABASE"
+        print_info "  - DB_USERNAME, DB_PASSWORD"
+        print_info ""
+        print_info "Убедитесь, что PostgreSQL запущен:"
+        print_info "  sudo systemctl status postgresql"
+        print_info ""
+        print_info "Создайте пользователя БД, если он не существует:"
+        print_info "  sudo -u postgres psql -c \"CREATE USER $DB_USER WITH PASSWORD 'ваш_пароль';\""
+        print_info "  sudo -u postgres psql -c \"ALTER USER $DB_USER CREATEDB;\""
+        print_info ""
+        print_info "Создайте базу данных, если она не существует:"
+        print_info "  sudo -u postgres createdb -O $DB_USER $DB_NAME"
+        print_info ""
+        print_info "Подробная информация в docs/DATABASE_ERRORS.md"
+        print_warning "Пропуск миграций"
+    fi
+    
+    # Очистка переменных окружения с паролем
+    unset PGPASSWORD
+    unset PGCONNECT_TIMEOUT
+else
+    print_error "Файл .env не найден"
+    print_warning "Пропуск миграций"
+fi
+
 cd ..
 
 # Настройка Nginx
@@ -110,6 +158,7 @@ Type=simple
 User=iiko
 WorkingDirectory=$PROJECT_DIR/backend
 Environment="PATH=$PROJECT_DIR/backend/venv/bin"
+Environment="PYTHONPATH=$PROJECT_DIR/backend"
 ExecStart=$PROJECT_DIR/backend/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 Restart=always
 
@@ -124,11 +173,20 @@ systemctl daemon-reload
 print_info "Запуск сервисов..."
 systemctl enable iiko-backend
 systemctl restart iiko-backend
+
+# Запуск PHP-FPM (требуется для Laravel frontend)
+print_info "Запуск PHP-FPM..."
+systemctl enable php8.3-fpm || systemctl enable php-fpm || print_warning "PHP-FPM service не найден"
+systemctl restart php8.3-fpm || systemctl restart php-fpm || print_warning "Не удалось перезапустить PHP-FPM"
+
 systemctl restart nginx
 
 # Проверка статуса
 print_info "Проверка статуса сервисов..."
 systemctl status iiko-backend --no-pager || true
+if ! systemctl status php8.3-fpm --no-pager 2>/dev/null && ! systemctl status php-fpm --no-pager 2>/dev/null; then
+    print_warning "PHP-FPM не запущен"
+fi
 systemctl status nginx --no-pager || true
 
 print_info "Деплой завершен успешно!"

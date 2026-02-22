@@ -37,19 +37,19 @@ chmod +x scripts/*.sh
 ```bash
 nano backend/.env
 ```
-Измените `your_password` на ваш пароль из шага 3.
+Измените `your_password` на пароль 12101991Qq!
 
 **Frontend:**
 ```bash
 nano frontend/.env
 ```
-Измените `your_password` на тот же пароль.
+Измените `your_password` на пароль 12101991Qq!
 
 **Nginx:**
 ```bash
 nano nginx/iiko-base.conf
 ```
-Замените `yourdomain.com` на ваш домен или IP.
+Замените `yourdomain.com` на ваш домен (vezuroll.ru или b1d8d8270d0f.vps.myjino.ru) или IP.
 
 ### 5. Запустите
 ```bash
